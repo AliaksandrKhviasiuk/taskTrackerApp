@@ -27,8 +27,23 @@ struct ContentView: View {
                         description: Text("Tap \"Add Task\" to create your first task.")
                     )
                 } else {
-                    List(viewModel.tasks) { task in
-                        Label(task.title, systemImage: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    List {
+                        ForEach(viewModel.tasks) { task in
+                            Button {
+                                viewModel.toggleCompletion(for: task.id)
+                            } label: {
+                                Label {
+                                    Text(task.title)
+                                        .strikethrough(task.isCompleted)
+                                        .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                                } icon: {
+                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(task.isCompleted ? .green : .secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .onDelete(perform: viewModel.deleteTask)
                     }
                 }
             }

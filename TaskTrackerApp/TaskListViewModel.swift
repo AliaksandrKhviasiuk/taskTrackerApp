@@ -31,4 +31,15 @@ final class TaskListViewModel {
         validationMessage = nil
         return true
     }
+
+    func toggleCompletion(for taskID: TaskItem.ID) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        tasks[index].isCompleted.toggle()
+    }
+
+    func deleteTask(at offsets: IndexSet) {
+        for index in offsets.sorted(by: >) {
+            tasks.remove(at: index)
+        }
+    }
 }
