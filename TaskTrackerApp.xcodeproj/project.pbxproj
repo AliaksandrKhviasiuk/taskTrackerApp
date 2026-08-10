@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		EB3515113029343100AD164D /* TestPlan_1-4.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = EB3515103029343100AD164D /* TestPlan_1-4.xctestplan */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		EB30339C3027FE6000C38F2F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -31,7 +27,6 @@
 		EB30338E3027FE5F00C38F2F /* TaskTrackerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskTrackerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EB30339B3027FE6000C38F2F /* TaskTrackerAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TaskTrackerAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EB3033A53027FE6000C38F2F /* TaskTrackerAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TaskTrackerAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		EB3515103029343100AD164D /* TestPlan_1-4.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = "TestPlan_1-4.xctestplan"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,7 +75,6 @@
 		EB3033853027FE5F00C38F2F = {
 			isa = PBXGroup;
 			children = (
-				EB3515103029343100AD164D /* TestPlan_1-4.xctestplan */,
 				EB3033903027FE5F00C38F2F /* TaskTrackerApp */,
 				EB30339E3027FE6000C38F2F /* TaskTrackerAppTests */,
 				EB3033A83027FE6000C38F2F /* TaskTrackerAppUITests */,
@@ -218,7 +212,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EB3515113029343100AD164D /* TestPlan_1-4.xctestplan in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
