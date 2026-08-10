@@ -18,6 +18,15 @@ final class TaskListViewModel {
         return String(title.prefix(titleCharacterLimit))
     }
 
+    /// The single canonical "is this title valid" check — non-empty after
+    /// trimming, and within `titleCharacterLimit`. Both the View's
+    /// button-enabled state and `validatedTitle(from:)` derive from this, so
+    /// the rule itself only needs to change in one place.
+    static func isValidTitle(_ title: String) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed.count <= titleCharacterLimit
+    }
+
     static let undoWindow: TimeInterval = 5
 
     private(set) var tasks: [TaskItem]
@@ -122,19 +131,25 @@ final class TaskListViewModel {
         storage.save(tasks)
     }
 
-    /// Single validation path shared by `addTask` and `updateTitle`, so title
-    /// rules only need to change in one place. Sets `validationMessage` and
-    /// returns the trimmed, valid title, or returns `nil` on failure.
+    /// Single validation path shared by `addTask` and `updateTitle`. Defers
+    /// the actual pass/fail rule to `isValidTitle(_:)`; only picks which
+    /// message to show when it fails. Sets `validationMessage` and returns
+    /// the trimmed, valid title, or returns `nil` on failure.
+    ///
+    /// The length check below is unreachable through the real UI today — the
+    /// View caps input live via `cappedTitle`, per KAN-5's decision to keep
+    /// prevention-at-input-time rather than switch to reject-with-message.
+    /// It's kept deliberately, not as dead code: it's the ViewModel's own
+    /// invariant, so any future caller that bypasses the View (tests, a
+    /// future extension, etc.) still gets a correctly rejected over-length
+    /// title instead of silently accepting one.
     private func validatedTitle(from title: String) -> String? {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !trimmedTitle.isEmpty else {
-            validationMessage = "Task title can't be empty."
-            return nil
-        }
-
-        guard trimmedTitle.count <= Self.titleCharacterLimit else {
-            validationMessage = "Task title can't be longer than \(Self.titleCharacterLimit) characters."
+        guard Self.isValidTitle(title) else {
+            validationMessage = trimmedTitle.isEmpty
+                ? "Task title can't be empty."
+                : "Task title can't be longer than \(Self.titleCharacterLimit) characters."
             return nil
         }
 

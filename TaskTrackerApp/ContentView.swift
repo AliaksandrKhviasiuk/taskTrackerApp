@@ -121,7 +121,7 @@ struct ContentView: View {
                     }
 
                 Button("Confirm", action: confirmNewTask)
-                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!TaskListViewModel.isValidTitle(newTaskTitle))
 
                 Button("Cancel", role: .cancel) {
                     cancelNewTask()
@@ -198,7 +198,7 @@ private struct EditTaskSheet: View {
                         guard viewModel.updateTitle(for: task.id, to: title) else { return }
                         onDismiss()
                     }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!TaskListViewModel.isValidTitle(title))
                 }
             }
             .onAppear { isTitleFieldFocused = true }
