@@ -17,7 +17,12 @@ protocol TaskStoring {
 }
 
 /// Persists tasks as JSON in a file under the app's Application Support directory.
-final class FileTaskStore: TaskStoring {
+///
+/// Explicitly `nonisolated`: this does synchronous file I/O with no UI or
+/// shared-state dependency, so it shouldn't inherit the app target's
+/// MainActor default — that would block off-main-actor callers (like tests)
+/// from using it through the `TaskStoring` existential.
+nonisolated final class FileTaskStore: TaskStoring {
     private let fileURL: URL
     private let fileManager: FileManager
 
@@ -53,7 +58,7 @@ final class FileTaskStore: TaskStoring {
 /// only. Used as the default so constructing a bare `TaskListViewModel()`
 /// (as the existing unit tests do) stays side-effect-free and isolated;
 /// real persistence is opted into by passing `FileTaskStore()` explicitly.
-final class TransientTaskStore: TaskStoring {
+nonisolated final class TransientTaskStore: TaskStoring {
     func loadTasks() -> [TaskItem] { [] }
     func save(_ tasks: [TaskItem]) {}
 }
