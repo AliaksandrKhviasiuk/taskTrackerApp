@@ -402,12 +402,17 @@ final class TaskListViewModelTests: XCTestCase {
 
     // MARK: - AC: task exists in the list -> delete action removes it; AC: list had only one task -> deleting it empties the list
 
+    // Since KAN-10, deleteTask only soft-deletes (see the KAN-10-tagged tests
+    // below); these AC-level tests commit the pending deletion immediately
+    // via commitPendingDeletion() to observe the same end state as before.
+
     func test_deleteTask_onListWithSingleTask_removesTaskAndResultsInEmptyList() {
         // Arrange
         sut.addTask(title: "Buy milk")
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 0))
+        sut.commitPendingDeletion()
 
         // Assert
         XCTAssertTrue(sut.tasks.isEmpty)
@@ -421,6 +426,7 @@ final class TaskListViewModelTests: XCTestCase {
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 0))
+        sut.commitPendingDeletion()
 
         // Assert
         XCTAssertEqual(sut.tasks.map(\.title), ["Walk the dog", "Write report"])
@@ -432,6 +438,7 @@ final class TaskListViewModelTests: XCTestCase {
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 1))
+        sut.commitPendingDeletion()
 
         // Assert
         XCTAssertEqual(sut.tasks.map(\.title), ["Buy milk", "Write report"])
@@ -443,12 +450,15 @@ final class TaskListViewModelTests: XCTestCase {
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 2))
+        sut.commitPendingDeletion()
 
         // Assert
         XCTAssertEqual(sut.tasks.map(\.title), ["Buy milk", "Walk the dog"])
     }
 
-    // MARK: - AC: deletion is confirmed permanently -> no undo; repeated deletions stay consistent
+    // MARK: - AC: once committed, deletion is permanent; repeated deletions stay consistent
+    // (each subsequent deleteTask call also commits the previous one — see the
+    // KAN-10-TC-04 tests below for that behavior in isolation)
 
     func test_deleteTask_calledSequentially_eventuallyEmptiesTheList() {
         // Arrange
@@ -456,8 +466,9 @@ final class TaskListViewModelTests: XCTestCase {
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 0)) // removes "Buy milk"
-        sut.deleteTask(at: IndexSet(integer: 0)) // removes "Walk the dog" (shifted to index 0)
-        sut.deleteTask(at: IndexSet(integer: 0)) // removes "Write report" (shifted to index 0)
+        sut.deleteTask(at: IndexSet(integer: 0)) // removes "Walk the dog" (shifted to index 0), commits "Buy milk"
+        sut.deleteTask(at: IndexSet(integer: 0)) // removes "Write report" (shifted to index 0), commits "Walk the dog"
+        sut.commitPendingDeletion() // commit "Write report", the last pending one
 
         // Assert
         XCTAssertTrue(sut.tasks.isEmpty)

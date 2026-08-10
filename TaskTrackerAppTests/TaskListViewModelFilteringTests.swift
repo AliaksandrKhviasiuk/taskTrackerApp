@@ -223,13 +223,18 @@ final class TaskListViewModelFilteringTests: XCTestCase {
     // MARK: - deleteTask with a filter active (implementation detail, not a specific manual
     // case — regression coverage for the offset-translation fix introduced by this story)
 
+    // KAN-10: deleteTask now only soft-deletes (hidden from displayedTasks,
+    // still in tasks); commitPendingDeletion() finalizes it so these tests
+    // observe the same end state on `tasks` as before.
+
     func test_deleteTask_withNotCompletedFilterActive_deletesCorrectUnderlyingTask() {
         // Arrange
-        addMixedSampleTasks() // filteredTasks (Not Completed) == ["Buy milk", "Write report"]
+        addMixedSampleTasks() // displayedTasks (Not Completed) == ["Buy milk", "Write report"]
         sut.filter = .notCompleted
 
         // Act
-        sut.deleteTask(at: IndexSet(integer: 1)) // offset 1 in the filtered list == "Write report"
+        sut.deleteTask(at: IndexSet(integer: 1)) // offset 1 in the displayed list == "Write report"
+        sut.commitPendingDeletion()
 
         // Assert
         XCTAssertEqual(sut.tasks.map(\.title), ["Buy milk", "Walk the dog"])
@@ -237,11 +242,12 @@ final class TaskListViewModelFilteringTests: XCTestCase {
 
     func test_deleteTask_withCompletedFilterActive_deletesCorrectUnderlyingTask() {
         // Arrange
-        addMixedSampleTasks() // filteredTasks (Completed) == ["Walk the dog"]
+        addMixedSampleTasks() // displayedTasks (Completed) == ["Walk the dog"]
         sut.filter = .completed
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 0))
+        sut.commitPendingDeletion()
 
         // Assert
         XCTAssertEqual(sut.tasks.map(\.title), ["Buy milk", "Write report"])
@@ -253,7 +259,8 @@ final class TaskListViewModelFilteringTests: XCTestCase {
         sut.filter = .notCompleted
 
         // Act
-        sut.deleteTask(at: IndexSet(integer: 0)) // removes "Buy milk" via the filtered view
+        sut.deleteTask(at: IndexSet(integer: 0)) // removes "Buy milk" via the displayed view
+        sut.commitPendingDeletion()
 
         // Assert
         XCTAssertEqual(sut.tasks.map(\.title), ["Walk the dog", "Write report"])

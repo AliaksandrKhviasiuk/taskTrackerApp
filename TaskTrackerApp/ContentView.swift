@@ -38,7 +38,7 @@ struct ContentView: View {
                         systemImage: "checklist",
                         description: Text("Tap \"Add Task\" to create your first task.")
                     )
-                } else if viewModel.filteredTasks.isEmpty {
+                } else if viewModel.displayedTasks.isEmpty {
                     ContentUnavailableView(
                         "No Matching Tasks",
                         systemImage: "line.3.horizontal.decrease.circle",
@@ -46,7 +46,7 @@ struct ContentView: View {
                     )
                 } else {
                     List {
-                        ForEach(viewModel.filteredTasks) { task in
+                        ForEach(viewModel.displayedTasks) { task in
                             Button {
                                 viewModel.toggleCompletion(for: task.id)
                             } label: {
@@ -87,7 +87,26 @@ struct ContentView: View {
                     editingTask = nil
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                if viewModel.hasPendingDeletion {
+                    undoBanner
+                }
+            }
         }
+    }
+
+    private var undoBanner: some View {
+        let count = viewModel.pendingDeletionTaskIDs.count
+        return HStack {
+            Text(count == 1 ? "Task deleted" : "\(count) tasks deleted")
+            Spacer()
+            Button("Undo") {
+                viewModel.undoDelete()
+            }
+            .fontWeight(.semibold)
+        }
+        .padding()
+        .background(.thinMaterial)
     }
 
     private var addTaskRow: some View {

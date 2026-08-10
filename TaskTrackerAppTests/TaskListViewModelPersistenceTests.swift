@@ -198,6 +198,7 @@ final class TaskListViewModelPersistenceTests: XCTestCase {
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 0))
+        sut.commitPendingDeletion() // KAN-10: deletion is soft until committed
 
         // Assert
         XCTAssertEqual(fakeStorage.lastSavedTasks?.map(\.title), ["Walk the dog"])
@@ -210,12 +211,15 @@ final class TaskListViewModelPersistenceTests: XCTestCase {
 
         // Act
         sut.deleteTask(at: IndexSet(integer: 0))
+        sut.commitPendingDeletion() // KAN-10: deletion is soft until committed
 
         // Assert
         XCTAssertEqual(fakeStorage.lastSavedTasks?.count, 0)
     }
 
-    func test_deleteTask_withEmptyOffsets_stillPersistsCurrentTasks() {
+    // KAN-10: deleteTask is now a true no-op for empty offsets — no pending
+    // deletion is created, so there's nothing to commit and no reason to save.
+    func test_deleteTask_withEmptyOffsets_doesNotCallSave() {
         // Arrange
         let sut = TaskListViewModel(storage: fakeStorage)
         sut.addTask(title: "Buy milk")
@@ -225,8 +229,8 @@ final class TaskListViewModelPersistenceTests: XCTestCase {
         sut.deleteTask(at: IndexSet())
 
         // Assert
-        XCTAssertEqual(fakeStorage.saveCallCount, saveCallCountBeforeDelete + 1)
-        XCTAssertEqual(fakeStorage.lastSavedTasks?.map(\.title), ["Buy milk"])
+        XCTAssertEqual(fakeStorage.saveCallCount, saveCallCountBeforeDelete)
+        XCTAssertFalse(sut.hasPendingDeletion)
     }
 
     // MARK: - AC: previously saved data is missing, corrupted, or unreadable -> falls back to empty list instead of crashing
