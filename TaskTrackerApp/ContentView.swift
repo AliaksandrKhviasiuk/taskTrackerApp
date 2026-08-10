@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var viewModel = TaskListViewModel(storage: FileTaskStore())
     @State private var isAddingTask = false
     @State private var newTaskTitle = ""
+    @State private var editingTask: TaskItem?
     @FocusState private var isTitleFieldFocused: Bool
 
     var body: some View {
@@ -20,15 +21,32 @@ struct ContentView: View {
                     addTaskRow
                 }
 
+                if !viewModel.tasks.isEmpty {
+                    Picker("Filter", selection: $viewModel.filter) {
+                        ForEach(TaskFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                }
+
                 if viewModel.tasks.isEmpty {
                     ContentUnavailableView(
                         "No Tasks Yet",
                         systemImage: "checklist",
                         description: Text("Tap \"Add Task\" to create your first task.")
                     )
+                } else if viewModel.filteredTasks.isEmpty {
+                    ContentUnavailableView(
+                        "No Matching Tasks",
+                        systemImage: "line.3.horizontal.decrease.circle",
+                        description: Text("No tasks match the \"\(viewModel.filter.rawValue)\" filter.")
+                    )
                 } else {
                     List {
-                        ForEach(viewModel.tasks) { task in
+                        ForEach(viewModel.filteredTasks) { task in
                             Button {
                                 viewModel.toggleCompletion(for: task.id)
                             } label: {
@@ -42,6 +60,14 @@ struct ContentView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    editingTask = task
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                .tint(.blue)
+                            }
                         }
                         .onDelete(perform: viewModel.deleteTask)
                     }
@@ -56,6 +82,11 @@ struct ContentView: View {
                     }
                 }
             }
+            .sheet(item: $editingTask) { task in
+                EditTaskSheet(task: task, viewModel: viewModel) {
+                    editingTask = nil
+                }
+            }
         }
     }
 
@@ -67,9 +98,7 @@ struct ContentView: View {
                     .focused($isTitleFieldFocused)
                     .onSubmit(confirmNewTask)
                     .onChange(of: newTaskTitle) {
-                        if newTaskTitle.count > TaskListViewModel.titleCharacterLimit {
-                            newTaskTitle = String(newTaskTitle.prefix(TaskListViewModel.titleCharacterLimit))
-                        }
+                        newTaskTitle = TaskListViewModel.cappedTitle(newTaskTitle)
                     }
 
                 Button("Confirm", action: confirmNewTask)
@@ -101,6 +130,60 @@ struct ContentView: View {
         viewModel.validationMessage = nil
         isAddingTask = false
         isTitleFieldFocused = false
+    }
+}
+
+private struct EditTaskSheet: View {
+    let task: TaskItem
+    let viewModel: TaskListViewModel
+    let onDismiss: () -> Void
+
+    @State private var title: String
+    @FocusState private var isTitleFieldFocused: Bool
+
+    init(task: TaskItem, viewModel: TaskListViewModel, onDismiss: @escaping () -> Void) {
+        self.task = task
+        self.viewModel = viewModel
+        self.onDismiss = onDismiss
+        _title = State(initialValue: task.title)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Task title", text: $title)
+                        .focused($isTitleFieldFocused)
+                        .onChange(of: title) {
+                            title = TaskListViewModel.cappedTitle(title)
+                        }
+
+                    if let validationMessage = viewModel.validationMessage {
+                        Text(validationMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Edit Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        viewModel.validationMessage = nil
+                        onDismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        guard viewModel.updateTitle(for: task.id, to: title) else { return }
+                        onDismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear { isTitleFieldFocused = true }
+        }
     }
 }
 

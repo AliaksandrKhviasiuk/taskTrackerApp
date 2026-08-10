@@ -475,4 +475,297 @@ final class TaskListViewModelTests: XCTestCase {
         // Assert
         XCTAssertTrue(sut.tasks.isEmpty)
     }
+
+    // MARK: - KAN-8-TC-01: valid non-empty title -> updated title is saved and displayed in the list
+
+    func test_KAN8TC01_updateTitle_withValidTitle_returnsTrue() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        let result = sut.updateTitle(for: taskID, to: "Buy oat milk")
+
+        // Assert
+        XCTAssertTrue(result)
+    }
+
+    func test_KAN8TC01_updateTitle_withValidTitle_updatesTaskTitleInList() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        sut.updateTitle(for: taskID, to: "Buy oat milk")
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title, "Buy oat milk")
+    }
+
+    func test_KAN8TC01_updateTitle_withSurroundingWhitespace_trimsTitleBeforeStoring() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        sut.updateTitle(for: taskID, to: "  Buy oat milk  ")
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title, "Buy oat milk")
+    }
+
+    // MARK: - KAN-8-TC-02: clearing the title entirely -> save is blocked, validation message shown
+
+    func test_KAN8TC02_updateTitle_withEmptyTitle_returnsFalse() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        let result = sut.updateTitle(for: taskID, to: "")
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN8TC02_updateTitle_withEmptyTitle_doesNotChangeTaskTitle() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        sut.updateTitle(for: taskID, to: "")
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title, "Buy milk")
+    }
+
+    func test_KAN8TC02_updateTitle_withEmptyTitle_setsValidationMessage() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        sut.updateTitle(for: taskID, to: "")
+
+        // Assert
+        XCTAssertNotNil(sut.validationMessage)
+    }
+
+    // MARK: - KAN-8-TC-03: exactly 200 characters -> accepted (boundary case)
+
+    func test_KAN8TC03_updateTitle_withTitleExactly200Characters_returnsTrue() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        let boundaryTitle = String(repeating: "a", count: 200)
+
+        // Act
+        let result = sut.updateTitle(for: taskID, to: boundaryTitle)
+
+        // Assert
+        XCTAssertTrue(result)
+    }
+
+    func test_KAN8TC03_updateTitle_withTitleExactly200Characters_updatesTitle() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        let boundaryTitle = String(repeating: "a", count: 200)
+
+        // Act
+        sut.updateTitle(for: taskID, to: boundaryTitle)
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title.count, 200)
+    }
+
+    // MARK: - KAN-8-TC-04: 201+ characters -> same length rule as task creation applies (rejected with message)
+
+    func test_KAN8TC04_updateTitle_withTitleOf201Characters_returnsFalse() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        let overBoundaryTitle = String(repeating: "a", count: 201)
+
+        // Act
+        let result = sut.updateTitle(for: taskID, to: overBoundaryTitle)
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN8TC04_updateTitle_withTitleOf201Characters_doesNotChangeTaskTitle() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        let overBoundaryTitle = String(repeating: "a", count: 201)
+
+        // Act
+        sut.updateTitle(for: taskID, to: overBoundaryTitle)
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title, "Buy milk")
+    }
+
+    func test_KAN8TC04_updateTitle_withTitleOf201Characters_setsValidationMessage() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        let overBoundaryTitle = String(repeating: "a", count: 201)
+
+        // Act
+        sut.updateTitle(for: taskID, to: overBoundaryTitle)
+
+        // Assert
+        XCTAssertNotNil(sut.validationMessage)
+    }
+
+    // MARK: - KAN-8-TC-05: whitespace-only title -> treated as empty, save blocked, validation message shown
+
+    func test_KAN8TC05_updateTitle_withWhitespaceOnlyTitle_returnsFalse() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        let result = sut.updateTitle(for: taskID, to: "   \n  ")
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN8TC05_updateTitle_withWhitespaceOnlyTitle_doesNotChangeTaskTitle() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        sut.updateTitle(for: taskID, to: "   \n  ")
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title, "Buy milk")
+    }
+
+    func test_KAN8TC05_updateTitle_withWhitespaceOnlyTitle_setsValidationMessage() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+
+        // Act
+        sut.updateTitle(for: taskID, to: "   \n  ")
+
+        // Assert
+        XCTAssertNotNil(sut.validationMessage)
+    }
+
+    // MARK: - KAN-8-TC-09: editing a completed task -> title updates correctly, completed status unaffected
+
+    func test_KAN8TC09_updateTitle_onCompletedTask_updatesTitle() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        sut.toggleCompletion(for: taskID)
+        XCTAssertTrue(sut.tasks[0].isCompleted) // sanity check on arranged state
+
+        // Act
+        sut.updateTitle(for: taskID, to: "Buy oat milk")
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title, "Buy oat milk")
+    }
+
+    func test_KAN8TC09_updateTitle_onCompletedTask_doesNotChangeCompletionStatus() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        sut.toggleCompletion(for: taskID)
+
+        // Act
+        sut.updateTitle(for: taskID, to: "Buy oat milk")
+
+        // Assert
+        XCTAssertTrue(sut.tasks[0].isCompleted)
+    }
+
+    // MARK: - updateTitle: state toggling (mirrors addTask's validation-recovery behavior)
+
+    func test_updateTitle_afterValidationFailure_thenValidTitle_updatesTitleAndClearsMessage() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        sut.updateTitle(for: taskID, to: "")
+        XCTAssertNotNil(sut.validationMessage) // sanity check on arranged state
+
+        // Act
+        let result = sut.updateTitle(for: taskID, to: "Buy oat milk")
+
+        // Assert
+        XCTAssertTrue(result)
+        XCTAssertEqual(sut.tasks[0].title, "Buy oat milk")
+        XCTAssertNil(sut.validationMessage)
+    }
+
+    // MARK: - updateTitle: multi-task list integrity (implementation detail, not a specific manual case)
+
+    func test_updateTitle_withMultipleTasks_onlyUpdatesTargetedTask() {
+        // Arrange
+        addThreeSampleTasks()
+        let targetID = sut.tasks[1].id
+
+        // Act
+        sut.updateTitle(for: targetID, to: "Walk the cat")
+
+        // Assert
+        XCTAssertEqual(sut.tasks.map(\.title), ["Buy milk", "Walk the cat", "Write report"])
+    }
+
+    func test_updateTitle_withMultipleTasks_preservesListOrder() {
+        // Arrange
+        addThreeSampleTasks()
+        let lastID = sut.tasks[2].id
+
+        // Act
+        sut.updateTitle(for: lastID, to: "Submit report")
+
+        // Assert
+        XCTAssertEqual(sut.tasks.map(\.title), ["Buy milk", "Walk the dog", "Submit report"])
+    }
+
+    // MARK: - updateTitle: edge cases
+
+    func test_updateTitle_withUnknownTaskID_returnsFalse() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let unknownID = UUID()
+
+        // Act
+        let result = sut.updateTitle(for: unknownID, to: "New title")
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_updateTitle_withUnknownTaskID_doesNotModifyTasks() {
+        // Arrange
+        sut.addTask(title: "Buy milk")
+        let unknownID = UUID()
+
+        // Act
+        sut.updateTitle(for: unknownID, to: "New title")
+
+        // Assert
+        XCTAssertEqual(sut.tasks[0].title, "Buy milk")
+    }
+
+    func test_updateTitle_onEmptyTaskList_returnsFalse() {
+        // Arrange
+        let unknownID = UUID()
+
+        // Act
+        let result = sut.updateTitle(for: unknownID, to: "New title")
+
+        // Assert
+        XCTAssertFalse(result)
+    }
 }

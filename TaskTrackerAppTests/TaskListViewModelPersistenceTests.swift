@@ -120,6 +120,50 @@ final class TaskListViewModelPersistenceTests: XCTestCase {
         XCTAssertEqual(fakeStorage.saveCallCount, 0)
     }
 
+    // MARK: - KAN-8-TC-01 / KAN-8-TC-02: updateTitle persists like addTask does
+
+    func test_KAN8TC01_updateTitle_withValidTitle_savesFullUpdatedTaskListToStorage() {
+        // Arrange
+        let sut = TaskListViewModel(storage: fakeStorage)
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        let saveCallCountBeforeUpdate = fakeStorage.saveCallCount
+
+        // Act
+        sut.updateTitle(for: taskID, to: "Buy oat milk")
+
+        // Assert
+        XCTAssertEqual(fakeStorage.saveCallCount, saveCallCountBeforeUpdate + 1)
+        XCTAssertEqual(fakeStorage.lastSavedTasks?.map(\.title), ["Buy oat milk"])
+    }
+
+    func test_KAN8TC02_updateTitle_withEmptyTitle_doesNotSaveToStorage() {
+        // Arrange
+        let sut = TaskListViewModel(storage: fakeStorage)
+        sut.addTask(title: "Buy milk")
+        let taskID = sut.tasks[0].id
+        let saveCallCountBeforeUpdate = fakeStorage.saveCallCount
+
+        // Act
+        sut.updateTitle(for: taskID, to: "")
+
+        // Assert
+        XCTAssertEqual(fakeStorage.saveCallCount, saveCallCountBeforeUpdate)
+    }
+
+    func test_updateTitle_withUnknownTaskID_doesNotCallSave() {
+        // Arrange
+        let sut = TaskListViewModel(storage: fakeStorage)
+        sut.addTask(title: "Buy milk")
+        let saveCallCountBeforeUpdate = fakeStorage.saveCallCount
+
+        // Act
+        sut.updateTitle(for: UUID(), to: "New title")
+
+        // Assert
+        XCTAssertEqual(fakeStorage.saveCallCount, saveCallCountBeforeUpdate)
+    }
+
     func test_toggleCompletion_savesUpdatedCompletionStatusToStorage() {
         // Arrange
         let sut = TaskListViewModel(storage: fakeStorage)
