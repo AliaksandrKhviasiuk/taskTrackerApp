@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var viewModel = TaskListViewModel()
+    @State private var viewModel = TaskListViewModel(storage: FileTaskStore())
     @State private var isAddingTask = false
     @State private var newTaskTitle = ""
     @FocusState private var isTitleFieldFocused: Bool
