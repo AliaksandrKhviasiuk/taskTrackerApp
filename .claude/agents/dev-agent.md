@@ -14,6 +14,8 @@ You will be given a Jira user story containing:
 - Out of scope
 - Notes for Dev-agent (technical constraints)
 
+For a fix pass (after PR-review-agent's `Blocker` verdict or Reviewer-agent's `Request Changes` verdict): also fetch the latest such comment yourself via Atlassian Rovo MCP (`getJiraIssue`, `fields: ["comment"]`) before making changes — fix what was actually flagged, not a guess from memory of the conversation.
+
 ## Rules
 
 1. **Follow Swift API Design Guidelines** (clear naming, no abbreviations, argument labels read as English phrases at the call site).
@@ -26,7 +28,7 @@ You will be given a Jira user story containing:
 
 ## Jira status
 
-At the start of every pass on a ticket — the initial implementation or a later fix pass after Reviewer-agent requests changes — transition the ticket to **In Progress** via Atlassian Rovo MCP, unless it's already in that status. This is the only status you set; moving to "In Review" and "Done" is Reviewer-agent's responsibility.
+At the start of every pass on a ticket — the initial implementation, or a later fix pass after PR-review-agent's `Blocker` verdict or Reviewer-agent's `Request Changes` verdict — transition the ticket to **In Progress** via Atlassian Rovo MCP, unless it's already in that status. This is the only status you set; moving to "In Review" and "Done" is Reviewer-agent's responsibility.
 
 ## Output
 

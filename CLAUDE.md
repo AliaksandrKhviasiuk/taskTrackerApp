@@ -83,18 +83,30 @@ Full per-agent rules (input contract, output format, Jira status transitions, to
 ### 0. BA-agent (`ba-agent.md`)
 Upstream of the main pipeline. Drafts Jira stories from free-text feature or sprint-goal descriptions, searches the existing backlog for duplicates, and files the ticket (Status: To Do) with AC (Given/When/Then), Out of scope, and Notes for Dev-agent. Does not estimate, does not touch status beyond creating To Do.
 
+### 0.5. Requirements-analysis-agent (`requirements-analysis-agent.md`)
+**Starts from:** The story BA-agent just created, plus any tickets it references in "Notes for Dev-agent."  
+**Produces:** A Jira comment classifying each finding by **Resolution path**: *Auto-apply* (the fix just relocates an already-decided fact — e.g. something stated only in Notes for Dev-agent — into the AC; BA-agent folds it in on a follow-up pass and the pipeline continues automatically) or *Needs human* (resolving it means picking an answer, like a concrete threshold, that doesn't exist anywhere in the ticket yet).  
+A finding that is both **Critical** and **Needs human** gets the ticket labeled `needs-clarification` — Manual-QA-agent and Dev-agent must not start on a labeled ticket. This holds only that one ticket; the rest of the sprint proceeds normally. The label is removed once a human resolves the AC.  
+Runs **after** BA-agent, **before** Manual-QA-agent/Dev-agent.
+
 ### 1. Manual-QA-agent (`manual-qa-agent.md`)
-**Starts from:** Jira AC and Out of scope only — deliberately blind to any implementation.  
+**Starts from:** Jira AC and Out of scope only — deliberately blind to any implementation. Do not start on a ticket carrying the `needs-clarification` label.  
 **Produces:** A Jira comment with a Markdown test-case table using `{ISSUE_KEY}-TC-{NN}` IDs.  
 Runs **in parallel** with Dev-agent; both start from the same ticket.
 
 ### 2. Dev-agent (`dev-agent.md`)
-**Starts from:** Jira story (Summary, AC, Out of scope, Notes for Dev-agent).  
+**Starts from:** Jira story (Summary, AC, Out of scope, Notes for Dev-agent). Do not start on a ticket carrying the `needs-clarification` label.  
 **Produces:** Swift/SwiftUI code changes + a written summary (files changed, assumptions, explicit out-of-scope callouts). Transitions ticket to **In Progress** at the start of every pass.  
 Runs **in parallel** with Manual-QA-agent.
 
+### 2.5. PR-review-agent (`pr-review-agent.md`)
+**Starts from:** Jira story (AC, Out of scope, Notes for Dev-agent) + Dev-agent's diff/summary. No tests exist yet at this stage — that's deliberate.  
+**Produces:** A fast Jira comment verdict — `Pass` or `Blocker` — on scope creep, logic duplication, MVVM violations, and obvious correctness red flags only. Deliberately narrower than Reviewer-agent (no test quality, no coverage, no traceability — those need tests to exist). Defaults to Pass when uncertain; a false block costs a full Dev-agent round-trip for nothing.  
+**Gate:** `Blocker` sends the ticket back to Dev-agent for a fix pass; PR-review-agent then re-reviews the updated diff before Unit-Tests-agent starts. `Pass` (even with non-blocking `note`s) proceeds straight through. Does not transition status.  
+Runs **after** Dev-agent, **before** Unit-Tests-agent.
+
 ### 3. Unit-Tests-agent (`unit-tests-agent.md`)
-**Starts from:** Jira story + Dev-agent diff + Manual-QA-agent's latest Jira comment (fetched via Atlassian Rovo MCP).  
+**Starts from:** Jira story + Dev-agent diff (after a PR-review-agent `Pass`) + Manual-QA-agent's latest Jira comment (fetched via Atlassian Rovo MCP).  
 **Produces:** XCTest unit tests in `TaskTrackerAppTests/` targeting the ViewModel/Model layer, plus a report: AC → test mapping, Manual-QA ID → test mapping, coverage estimate (≥70% target), and notes for Reviewer-agent.  
 Test name format: `test_<scenario>_<condition>_<expectedResult>()`; when a test traces to a Manual-QA-agent case, its ID is prepended: `test_{ISSUE_KEY}{TC_NUMBER}_<scenario>_<condition>_<expectedResult>()`. Coverage-only tests with no Manual-QA mapping keep the unprefixed form — never invent a fake ID.  
 Runs **after** Dev-agent.

@@ -1,11 +1,12 @@
 # BA-agent Rules
 
 ## Role
-Business Analyst agent for the Task Tracker iOS project. Drafts Jira-ready user stories from a feature/sprint goal description provided by the Scrum Master (the user). Does not write code, does not estimate, does not transition ticket status.
+Business Analyst agent for the Task Tracker iOS project. Drafts Jira-ready user stories from a feature/sprint goal description provided by the Scrum Master (the user), and runs the follow-up pass that applies Requirements-analysis-agent's findings to a story's AC (see "Follow-up pass" below). Does not write code, does not estimate, does not transition ticket status.
 
 ## Input
-- A feature, bug, or sprint-goal description in free text from the user
-- Existing Jira backlog context, fetched via Jira MCP (epics, related stories, open tech-debt tickets)
+- A feature, bug, or sprint-goal description in free text from the user — for drafting a new story.
+- Existing Jira backlog context, fetched via Jira MCP (epics, related stories, open tech-debt tickets).
+- For a follow-up pass: the target story plus its latest Requirements-analysis-agent comment (fetch via `getJiraIssue` with `comment` in `fields`).
 
 ## Output
 For each story, a Jira ticket with this structure:
@@ -28,6 +29,16 @@ For each story, a Jira ticket with this structure:
 8. Match the style/structure already used in the MVP epic (Create Task, View List, Mark Completed, Delete Task) for consistency across the backlog.
 9. When drafting a bug ticket instead of a story, keep the same AC format (Given/When/Then for expected vs. actual behavior) but use Issue Type = Bug.
 10. When drafting a tech-debt ticket, Description explains the debt and its impact instead of "As a user..."; AC describes the definition of done for the cleanup.
+
+## Follow-up pass: applying Requirements-analysis-agent findings
+
+Triggered separately from initial drafting — after Requirements-analysis-agent has posted its comment on a story (see `requirements-analysis-agent.md` for its "Resolution path" classification). Read that comment's table row by row and handle each row by its **Resolution path** column:
+
+1. **Auto-apply rows** — the "Suggested resolution" just relocates something already decided elsewhere in the ticket (Notes for Dev-agent, a referenced ticket, existing project convention) into the AC. Fold it into the Description/AC directly via `editJiraIssue` — no need to check with a human first, this is a rewording, not a new decision. Keep the rest of the ticket's structure and wording intact; make the smallest edit that resolves the row (add/reword one AC bullet, not a rewrite).
+2. **Needs human rows** — do NOT apply these on your own, ever, even if a "proposed" value is listed in the finding. Only act once an actual human decision is available to you — either the Scrum Master gives it to you directly when invoking this pass, or there's an explicit reply in the ticket's comments answering the question. If no such decision exists yet, skip the row and say so in your summary; do not invent a value to unblock the ticket yourself, that defeats the entire point of the flag.
+3. After applying fixes, check whether every row that caused the `needs-clarification` label (i.e. every Critical + Needs human row) is now resolved. If so, remove the label via `editJiraIssue` (`labels` field only). If any Critical + Needs human row is still open, leave the label in place.
+4. Post a short Jira comment summarizing what changed and why (e.g. "AC amended per Requirements-analysis-agent row 2: added explicit AC bullet for X, previously only in Notes for Dev-agent"), so the edit has the same traceability as the original finding. Reference row numbers, don't just say "updated AC."
+5. Never touch fields other than Description/AC (for the fix) and `labels` (for `needs-clarification`). Do not transition status — that's still owned by Dev-agent/Reviewer-agent per the main pipeline rules.
 
 ## Example story (for format reference)
 
