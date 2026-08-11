@@ -32,6 +32,7 @@ final class TaskListViewModel {
     private(set) var tasks: [TaskItem]
     var validationMessage: String?
     var filter: TaskFilter = .all
+    var searchText: String = ""
 
     /// IDs of tasks that have been deleted from the display but not yet
     /// committed to `tasks`/storage — still recoverable via `undoDelete()`.
@@ -40,17 +41,33 @@ final class TaskListViewModel {
     private let storage: TaskStoring
     private let undoScheduler: UndoScheduler
 
-    /// Derived view of `tasks` for the active filter. Never mutates or
+    /// Derived view of `tasks` for the active status filter and search text —
+    /// two independent, combinable predicates (KAN-13). Never mutates or
     /// reorders `tasks` itself — filtering only changes what's displayed.
     var filteredTasks: [TaskItem] {
+        let statusFiltered: [TaskItem]
         switch filter {
         case .all:
-            return tasks
+            statusFiltered = tasks
         case .notCompleted:
-            return tasks.filter { !$0.isCompleted }
+            statusFiltered = tasks.filter { !$0.isCompleted }
         case .completed:
-            return tasks.filter { $0.isCompleted }
+            statusFiltered = tasks.filter { $0.isCompleted }
         }
+
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSearch.isEmpty else { return statusFiltered }
+
+        return statusFiltered.filter {
+            $0.title.range(of: trimmedSearch, options: .caseInsensitive) != nil
+        }
+    }
+
+    /// Whether the empty `displayedTasks` state (when `tasks` is non-empty)
+    /// was caused by the search text, the status filter, or both — drives
+    /// which empty-state message the View shows.
+    var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// `filteredTasks` with any pending (not-yet-committed) deletions hidden.

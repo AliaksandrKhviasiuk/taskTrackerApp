@@ -42,7 +42,7 @@ struct ContentView: View {
                     ContentUnavailableView(
                         "No Matching Tasks",
                         systemImage: "line.3.horizontal.decrease.circle",
-                        description: Text("No tasks match the \"\(viewModel.filter.rawValue)\" filter.")
+                        description: Text(noMatchingTasksDescription)
                     )
                 } else {
                     List {
@@ -74,6 +74,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Tasks")
+            .searchable(text: $viewModel.searchText, prompt: "Search tasks")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Task") {
@@ -92,6 +93,25 @@ struct ContentView: View {
                     undoBanner
                 }
             }
+        }
+    }
+
+    /// Reuses the single "No Matching Tasks" empty state for every
+    /// zero-result cause (filter, search, or both combined) — text-only
+    /// change, no new empty-state variant (KAN-13, composes with KAN-9).
+    private var noMatchingTasksDescription: String {
+        let trimmedSearch = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasFilter = viewModel.filter != .all
+
+        switch (hasFilter, viewModel.isSearching) {
+        case (true, true):
+            return "No tasks match \"\(trimmedSearch)\" in the \"\(viewModel.filter.rawValue)\" filter."
+        case (true, false):
+            return "No tasks match the \"\(viewModel.filter.rawValue)\" filter."
+        case (false, true):
+            return "No tasks match \"\(trimmedSearch)\"."
+        case (false, false):
+            return ""
         }
     }
 
