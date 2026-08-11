@@ -106,8 +106,10 @@ final class TaskListViewModel {
     func addTask(title: String) -> Bool {
         guard let validTitle = validatedTitle(from: title) else { return false }
 
-        tasks.append(TaskItem(title: validTitle))
+        let newTask = TaskItem(title: validTitle)
+        tasks.append(newTask)
         storage.save(tasks)
+        revealIfHidden(newTask.id)
         return true
     }
 
@@ -118,7 +120,28 @@ final class TaskListViewModel {
 
         tasks[index].title = validTitle
         storage.save(tasks)
+        revealIfHidden(taskID)
         return true
+    }
+
+    /// After an add or edit, resets only whichever of `filter`/`searchText`
+    /// is actually hiding the affected task from `displayedTasks` — never
+    /// both when only one is the cause, and never either when neither is
+    /// (KAN-15). Editing a title never changes `isCompleted`, so the status
+    /// filter can only ever need resetting for a freshly-added (always
+    /// not-completed) task, not for an edit.
+    private func revealIfHidden(_ taskID: TaskItem.ID) {
+        guard let task = tasks.first(where: { $0.id == taskID }) else { return }
+        guard !displayedTasks.contains(where: { $0.id == taskID }) else { return }
+
+        if filter == .completed, !task.isCompleted {
+            filter = .all
+        }
+
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSearch.isEmpty, task.title.range(of: trimmedSearch, options: .caseInsensitive) == nil {
+            searchText = ""
+        }
     }
 
     /// Creates a copy of the task with the given ID (same title, not

@@ -77,7 +77,15 @@ final class TaskListViewModelDuplicateTests: XCTestCase {
     // MARK: - KAN-14-TC-04: duplicate lands in the underlying list even when the
     // active filter would hide it (new tasks always start not completed)
 
-    func test_KAN14TC04_duplicateTask_whileCompletedFilterActive_addsToUnderlyingTasksRegardlessOfDisplay() {
+    // Superseded by KAN-15: `duplicateTask` routes through `addTask`, and
+    // KAN-15 made `addTask` auto-reset a filter that would hide the new
+    // (always not-completed) task, instead of letting it silently
+    // disappear. So under the "Completed" filter, a duplicate is no longer
+    // just added-but-hidden — it's added AND immediately revealed by an
+    // auto-reset to "All". Updated in place rather than left describing
+    // behavior the app no longer has (KAN-14-TC-04 in Jira still describes
+    // the pre-KAN-15 contract; this test now documents the composed result).
+    func test_KAN14TC04_duplicateTask_whileCompletedFilterActive_addsToUnderlyingTasksAndKAN15AutoRevealsIt() {
         // Arrange
         sut.addTask(title: "Buy milk")
         let sourceID = sut.tasks[0].id
@@ -89,12 +97,9 @@ final class TaskListViewModelDuplicateTests: XCTestCase {
 
         // Assert
         XCTAssertEqual(sut.tasks.count, 2, "duplicate must be added to the underlying list")
-        XCTAssertFalse(sut.displayedTasks.contains { $0.title == "Buy milk" && !$0.isCompleted },
-                        "the not-completed duplicate should not be visible under the Completed filter")
-
-        sut.filter = .notCompleted
+        XCTAssertEqual(sut.filter, .all, "KAN-15: the Completed filter, which would have hidden the not-completed duplicate, auto-resets")
         XCTAssertTrue(sut.displayedTasks.contains { $0.id == sut.tasks[1].id },
-                       "switching filters reveals the duplicate that was already in the underlying list")
+                       "the duplicate is immediately visible after the auto-reset")
     }
 
     // MARK: - KAN-14-TC-05: happy-path contrast — duplicate appears immediately
