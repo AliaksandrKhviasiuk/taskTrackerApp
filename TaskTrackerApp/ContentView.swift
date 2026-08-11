@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var viewModel = TaskListViewModel(storage: FileTaskStore())
+    @State private var viewModel = TaskListViewModel(storage: FileTaskStore(), filterStorage: UserDefaultsFilterStore())
     @State private var isAddingTask = false
     @State private var newTaskTitle = ""
     @State private var editingTask: TaskItem?

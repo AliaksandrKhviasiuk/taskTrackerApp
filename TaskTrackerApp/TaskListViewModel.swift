@@ -31,7 +31,15 @@ final class TaskListViewModel {
 
     private(set) var tasks: [TaskItem]
     var validationMessage: String?
-    var filter: TaskFilter = .all
+
+    /// Persisted via `filterStorage` on every change (KAN-16) — restored in
+    /// `init`, independent of `searchText` which is deliberately never persisted.
+    var filter: TaskFilter = .all {
+        didSet {
+            filterStorage.save(filter)
+        }
+    }
+
     var searchText: String = ""
 
     /// IDs of tasks that have been deleted from the display but not yet
@@ -40,6 +48,7 @@ final class TaskListViewModel {
 
     private let storage: TaskStoring
     private let undoScheduler: UndoScheduler
+    private let filterStorage: FilterStoring
 
     /// Derived view of `tasks` for the active status filter and search text —
     /// two independent, combinable predicates (KAN-13). Never mutates or
@@ -78,10 +87,16 @@ final class TaskListViewModel {
 
     var hasPendingDeletion: Bool { !pendingDeletionTaskIDs.isEmpty }
 
-    init(storage: TaskStoring = TransientTaskStore(), undoScheduler: UndoScheduler = DispatchUndoScheduler()) {
+    init(
+        storage: TaskStoring = TransientTaskStore(),
+        undoScheduler: UndoScheduler = DispatchUndoScheduler(),
+        filterStorage: FilterStoring = TransientFilterStore()
+    ) {
         self.storage = storage
         self.undoScheduler = undoScheduler
+        self.filterStorage = filterStorage
         self.tasks = storage.loadTasks()
+        self.filter = filterStorage.loadFilter()
     }
 
     @discardableResult
