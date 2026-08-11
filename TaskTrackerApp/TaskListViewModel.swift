@@ -87,6 +87,9 @@ final class TaskListViewModel {
 
     var hasPendingDeletion: Bool { !pendingDeletionTaskIDs.isEmpty }
 
+    /// Whether "Clear Completed" (KAN-18) has anything to act on.
+    var hasCompletedTasks: Bool { tasks.contains { $0.isCompleted } }
+
     init(
         storage: TaskStoring = TransientTaskStore(),
         undoScheduler: UndoScheduler = DispatchUndoScheduler(),
@@ -146,6 +149,24 @@ final class TaskListViewModel {
     /// already pending, since its undo option is no longer visible.
     func deleteTask(at offsets: IndexSet) {
         let idsToDelete = Set(offsets.map { displayedTasks[$0].id })
+        beginPendingDeletion(for: idsToDelete)
+    }
+
+    /// Clears every completed task in one batch action (KAN-18). IDs are
+    /// computed from the full `tasks` array, not `displayedTasks` — an
+    /// active filter or search must never hide part of the batch from
+    /// being cleared. Shares the same single-pending-action undo mechanism
+    /// as `deleteTask(at:)` via `beginPendingDeletion(for:)`.
+    func clearCompletedTasks() {
+        let idsToDelete = Set(tasks.filter(\.isCompleted).map(\.id))
+        beginPendingDeletion(for: idsToDelete)
+    }
+
+    /// Shared entry point for starting a new pending deletion — used by both
+    /// single-task swipe-delete (KAN-4/KAN-10) and the batch "Clear
+    /// Completed" action (KAN-18), so "commit whatever was already pending,
+    /// then start the new one" has one implementation.
+    private func beginPendingDeletion(for idsToDelete: Set<TaskItem.ID>) {
         guard !idsToDelete.isEmpty else { return }
 
         commitPendingDeletion()

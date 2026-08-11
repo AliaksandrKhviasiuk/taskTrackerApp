@@ -89,6 +89,13 @@ struct ContentView: View {
                         isTitleFieldFocused = true
                     }
                 }
+                if viewModel.hasCompletedTasks {
+                    ToolbarItem(placement: .secondaryAction) {
+                        Button("Clear Completed", role: .destructive) {
+                            viewModel.clearCompletedTasks()
+                        }
+                    }
+                }
             }
             .sheet(item: $editingTask) { task in
                 EditTaskSheet(task: task, viewModel: viewModel) {
