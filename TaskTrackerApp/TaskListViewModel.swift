@@ -46,6 +46,23 @@ final class TaskListViewModel {
     /// committed to `tasks`/storage — still recoverable via `undoDelete()`.
     private(set) var pendingDeletionTaskIDs: Set<TaskItem.ID> = []
 
+    /// The most recent title edit, still within its undo window (KAN-17).
+    /// Unlike a pending deletion, the new title is already saved to
+    /// `storage` — this only tracks what to revert to, for `undoEdit()`.
+    struct PendingEdit: Equatable {
+        let taskID: TaskItem.ID
+        let previousTitle: String
+    }
+
+    /// Shares a single pending-action slot with `pendingDeletionTaskIDs`
+    /// (KAN-17, generalizing KAN-10's single-pending-deletion rule across
+    /// both action types): starting a new pending deletion or a new pending
+    /// edit always commits whatever else was pending first, via
+    /// `beginPendingDeletion(for:)`/`beginPendingEdit(taskID:previousTitle:)`
+    /// — so at most one of `pendingDeletionTaskIDs`/`pendingEdit` is ever
+    /// non-empty/non-nil at a time, and only one undo banner is ever shown.
+    private(set) var pendingEdit: PendingEdit?
+
     private let storage: TaskStoring
     private let undoScheduler: UndoScheduler
     private let filterStorage: FilterStoring
@@ -87,6 +104,8 @@ final class TaskListViewModel {
 
     var hasPendingDeletion: Bool { !pendingDeletionTaskIDs.isEmpty }
 
+    var hasPendingEdit: Bool { pendingEdit != nil }
+
     /// Whether "Clear Completed" (KAN-18) has anything to act on.
     var hasCompletedTasks: Bool { tasks.contains { $0.isCompleted } }
 
@@ -118,9 +137,11 @@ final class TaskListViewModel {
         guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return false }
         guard let validTitle = validatedTitle(from: newTitle) else { return false }
 
+        let previousTitle = tasks[index].title
         tasks[index].title = validTitle
         storage.save(tasks)
         revealIfHidden(taskID)
+        beginPendingEdit(taskID: taskID, previousTitle: previousTitle)
         return true
     }
 
@@ -188,11 +209,14 @@ final class TaskListViewModel {
     /// Shared entry point for starting a new pending deletion — used by both
     /// single-task swipe-delete (KAN-4/KAN-10) and the batch "Clear
     /// Completed" action (KAN-18), so "commit whatever was already pending,
-    /// then start the new one" has one implementation.
+    /// then start the new one" has one implementation. Also commits a
+    /// pending edit, if any — deletion and edit share one pending-action
+    /// slot (KAN-17).
     private func beginPendingDeletion(for idsToDelete: Set<TaskItem.ID>) {
         guard !idsToDelete.isEmpty else { return }
 
         commitPendingDeletion()
+        commitPendingEdit()
 
         pendingDeletionTaskIDs = idsToDelete
         undoScheduler.schedule(after: Self.undoWindow) { [weak self] in
@@ -217,6 +241,45 @@ final class TaskListViewModel {
         pendingDeletionTaskIDs.removeAll()
         tasks.removeAll { idsToDelete.contains($0.id) }
         storage.save(tasks)
+    }
+
+    /// Shared entry point for starting a new pending edit (KAN-17), mirroring
+    /// `beginPendingDeletion(for:)`: commits any earlier pending edit (same
+    /// type, e.g. a second edit before the first's window closes) AND any
+    /// pending deletion (different type, single shared slot) before starting
+    /// the new one. Uses the same `undoScheduler` instance as deletion —
+    /// `schedule(after:action:)` already replaces whatever was previously
+    /// scheduled on it, so only one timer is ever live regardless of type.
+    private func beginPendingEdit(taskID: TaskItem.ID, previousTitle: String) {
+        commitPendingDeletion()
+        commitPendingEdit()
+
+        pendingEdit = PendingEdit(taskID: taskID, previousTitle: previousTitle)
+        undoScheduler.schedule(after: Self.undoWindow) { [weak self] in
+            self?.commitPendingEdit()
+        }
+    }
+
+    /// Restores whatever edit is currently pending, reverting the task's
+    /// title back to its value before the edit. No-op if nothing is pending.
+    func undoEdit() {
+        guard let pendingEdit else { return }
+        undoScheduler.cancel()
+        if let index = tasks.firstIndex(where: { $0.id == pendingEdit.taskID }) {
+            tasks[index].title = pendingEdit.previousTitle
+            storage.save(tasks)
+        }
+        self.pendingEdit = nil
+    }
+
+    /// Makes the pending edit permanent (it's already the current title —
+    /// this just clears the tracking that made it recoverable). Called when
+    /// the undo window expires, or immediately when a new pending action
+    /// (deletion or edit) starts and an older edit is still pending.
+    private func commitPendingEdit() {
+        guard pendingEdit != nil else { return }
+        undoScheduler.cancel()
+        pendingEdit = nil
     }
 
     /// Single validation path shared by `addTask` and `updateTitle`. Defers

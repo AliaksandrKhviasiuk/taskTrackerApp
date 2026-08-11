@@ -103,7 +103,7 @@ struct ContentView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                if viewModel.hasPendingDeletion {
+                if viewModel.hasPendingDeletion || viewModel.hasPendingEdit {
                     undoBanner
                 }
             }
@@ -129,18 +129,34 @@ struct ContentView: View {
         }
     }
 
+    /// Covers both pending-action kinds (KAN-17) — deletion and edit share a
+    /// single pending-action slot on the ViewModel, so at most one of
+    /// `hasPendingDeletion`/`hasPendingEdit` is ever true, and this banner
+    /// never needs to represent both at once.
     private var undoBanner: some View {
-        let count = viewModel.pendingDeletionTaskIDs.count
-        return HStack {
-            Text(count == 1 ? "Task deleted" : "\(count) tasks deleted")
+        HStack {
+            Text(undoBannerText)
             Spacer()
             Button("Undo") {
-                viewModel.undoDelete()
+                if viewModel.hasPendingDeletion {
+                    viewModel.undoDelete()
+                } else {
+                    viewModel.undoEdit()
+                }
             }
             .fontWeight(.semibold)
         }
         .padding()
         .background(.thinMaterial)
+    }
+
+    private var undoBannerText: String {
+        if viewModel.hasPendingDeletion {
+            let count = viewModel.pendingDeletionTaskIDs.count
+            return count == 1 ? "Task deleted" : "\(count) tasks deleted"
+        } else {
+            return "Task edited"
+        }
     }
 
     private var addTaskRow: some View {
