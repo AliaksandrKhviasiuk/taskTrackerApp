@@ -67,6 +67,13 @@ struct ContentView: View {
                                     Label("Edit", systemImage: "pencil")
                                 }
                                 .tint(.blue)
+
+                                Button {
+                                    viewModel.duplicateTask(id: task.id)
+                                } label: {
+                                    Label("Duplicate", systemImage: "doc.on.doc")
+                                }
+                                .tint(.indigo)
                             }
                         }
                         .onDelete(perform: viewModel.deleteTask)
