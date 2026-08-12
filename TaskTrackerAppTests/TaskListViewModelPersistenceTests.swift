@@ -272,4 +272,25 @@ final class TaskListViewModelPersistenceTests: XCTestCase {
         XCTAssertEqual(secondLaunchViewModel.tasks.map(\.title), ["Buy milk", "Walk the dog"])
         XCTAssertEqual(secondLaunchViewModel.tasks.map(\.isCompleted), [true, false])
     }
+
+    // MARK: - KAN-19-TC-02: a task's due date survives closing and relaunching
+    // the app (proxied the same way as the round trip above: a fresh
+    // ViewModel/FileTaskStore pair over the same underlying file)
+
+    func test_KAN19TC02_newViewModelInstanceBackedBySameFileStore_restoresDueDateAcrossRelaunch() {
+        // Arrange
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+        let dueDate = Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 3))!
+        let firstLaunchStore = FileTaskStore(fileManager: DirectoryOverridingFileManager(overrideDirectory: tempDirectory))
+        let firstLaunchViewModel = TaskListViewModel(storage: firstLaunchStore)
+        firstLaunchViewModel.addTask(title: "Buy milk", dueDate: dueDate)
+
+        // Act (simulate closing and reopening the app: fresh store + fresh view model over the same file)
+        let secondLaunchStore = FileTaskStore(fileManager: DirectoryOverridingFileManager(overrideDirectory: tempDirectory))
+        let secondLaunchViewModel = TaskListViewModel(storage: secondLaunchStore)
+
+        // Assert
+        XCTAssertEqual(secondLaunchViewModel.tasks.first?.dueDate, dueDate)
+    }
 }

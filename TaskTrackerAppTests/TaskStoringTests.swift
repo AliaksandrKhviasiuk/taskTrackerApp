@@ -172,6 +172,58 @@ final class FileTaskStoreTests: XCTestCase {
         // Assert
         XCTAssertEqual(loaded, tasks)
     }
+
+    // MARK: - AC (KAN-19): a task's due date round-trips through real
+    // file-based persistence, same as its title/completion status
+
+    func test_loadTasks_afterSavingTaskWithDueDate_preservesDueDate() {
+        // Arrange
+        let dueDate = Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 3))!
+        let tasks = [TaskItem(title: "Buy milk", dueDate: dueDate)]
+        sut.save(tasks)
+
+        // Act
+        let loaded = sut.loadTasks()
+
+        // Assert
+        XCTAssertEqual(loaded.first?.dueDate, dueDate)
+    }
+
+    func test_loadTasks_afterSavingTaskWithNilDueDate_preservesNilDueDate() {
+        // Arrange
+        let tasks = [TaskItem(title: "Buy milk")]
+        sut.save(tasks)
+
+        // Act
+        let loaded = sut.loadTasks()
+
+        // Assert
+        XCTAssertNil(loaded.first?.dueDate)
+    }
+
+    // MARK: - Codable (KAN-19): tasks persisted before this story shipped (no
+    // "dueDate" key in their saved JSON at all) still load successfully, with
+    // dueDate == nil, through the real FileTaskStore load path — not just via
+    // JSONDecoder in isolation (see TaskItemTests for that narrower check).
+
+    func test_loadTasks_whenFileContainsLegacyJSONWithoutDueDateKey_decodesWithNilDueDate() throws {
+        // Arrange
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        let fileURL = tempDirectory.appendingPathComponent("tasks.json")
+        let id = UUID()
+        let legacyJSON = """
+        [{"id":"\(id.uuidString)","title":"Buy milk","isCompleted":false}]
+        """
+        try Data(legacyJSON.utf8).write(to: fileURL)
+
+        // Act
+        let loaded = sut.loadTasks()
+
+        // Assert
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded.first?.id, id)
+        XCTAssertNil(loaded.first?.dueDate)
+    }
 }
 
 final class TransientTaskStoreTests: XCTestCase {

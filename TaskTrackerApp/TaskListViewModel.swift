@@ -121,15 +121,30 @@ final class TaskListViewModel {
         self.filter = filterStorage.loadFilter()
     }
 
+    /// - Parameter dueDate: Optional due date (KAN-19). Not required —
+    ///   passing `nil` (the default) creates the task with no due date.
+    ///   Normalized to a date-only value via `normalizedDueDate(_:)` before
+    ///   being stored, regardless of what time-of-day component the caller
+    ///   passed in.
     @discardableResult
-    func addTask(title: String) -> Bool {
+    func addTask(title: String, dueDate: Date? = nil) -> Bool {
         guard let validTitle = validatedTitle(from: title) else { return false }
 
-        let newTask = TaskItem(title: validTitle)
+        let newTask = TaskItem(title: validTitle, dueDate: normalizedDueDate(dueDate))
         tasks.append(newTask)
         storage.save(tasks)
         revealIfHidden(newTask.id)
         return true
+    }
+
+    /// Strips any time-of-day component so a stored due date always
+    /// represents a calendar day (KAN-19: date only, no time-of-day) —
+    /// regardless of what time component a `DatePicker`-bound `Date` happens
+    /// to carry. `dueDate` stays a plain `Date` (rather than a dedicated
+    /// date-only type) to keep `TaskItem`'s `Codable` conformance simple.
+    private func normalizedDueDate(_ dueDate: Date?) -> Date? {
+        guard let dueDate else { return nil }
+        return Calendar.current.startOfDay(for: dueDate)
     }
 
     @discardableResult

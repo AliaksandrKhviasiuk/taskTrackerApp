@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var viewModel = TaskListViewModel(storage: FileTaskStore(), filterStorage: UserDefaultsFilterStore())
     @State private var isAddingTask = false
     @State private var newTaskTitle = ""
+    @State private var hasNewTaskDueDate = false
+    @State private var newTaskDueDate = Date()
     @State private var editingTask: TaskItem?
     @FocusState private var isTitleFieldFocused: Bool
 
@@ -51,9 +53,19 @@ struct ContentView: View {
                                 viewModel.toggleCompletion(for: task.id)
                             } label: {
                                 Label {
-                                    Text(task.title)
-                                        .strikethrough(task.isCompleted)
-                                        .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(task.title)
+                                            .strikethrough(task.isCompleted)
+                                            .foregroundStyle(task.isCompleted ? .secondary : .primary)
+
+                                        // (KAN-19) Only shown when the task has a due date —
+                                        // no placeholder for tasks without one.
+                                        if let dueDate = task.dueDate {
+                                            Text(dueDate, style: .date)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
                                 } icon: {
                                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                                         .foregroundStyle(task.isCompleted ? .green : .secondary)
@@ -178,6 +190,14 @@ struct ContentView: View {
                 }
             }
 
+            // (KAN-19) Optional due date, date-only — no time picker.
+            Toggle("Due Date", isOn: $hasNewTaskDueDate.animation())
+
+            if hasNewTaskDueDate {
+                DatePicker("Due Date", selection: $newTaskDueDate, displayedComponents: .date)
+                    .labelsHidden()
+            }
+
             if let validationMessage = viewModel.validationMessage {
                 Text(validationMessage)
                     .font(.footnote)
@@ -188,15 +208,20 @@ struct ContentView: View {
     }
 
     private func confirmNewTask() {
-        guard viewModel.addTask(title: newTaskTitle) else { return }
-        newTaskTitle = ""
-        isAddingTask = false
-        isTitleFieldFocused = false
+        let dueDate = hasNewTaskDueDate ? newTaskDueDate : nil
+        guard viewModel.addTask(title: newTaskTitle, dueDate: dueDate) else { return }
+        resetNewTaskInput()
     }
 
     private func cancelNewTask() {
-        newTaskTitle = ""
         viewModel.validationMessage = nil
+        resetNewTaskInput()
+    }
+
+    private func resetNewTaskInput() {
+        newTaskTitle = ""
+        hasNewTaskDueDate = false
+        newTaskDueDate = Date()
         isAddingTask = false
         isTitleFieldFocused = false
     }
