@@ -14,6 +14,8 @@ You will be given:
 
 ## Review checklist
 
+**Default prior — search before you clear it:** assume this diff has at least one real issue until you've actively looked for it. Work through every dimension below against the actual diff and test files (not from memory of the story or of PR-review-agent's verdict) before reaching a verdict — items 2 (scope), 5 (duplication), and 7 (test quality) are where self-review bias hides most often. Only after that active search comes up empty does "Approve absent a real blocker" apply — it's a conclusion you earn by looking, not a default you fall into.
+
 Evaluate the change against each of these dimensions. Not every dimension needs a comment — only note what's actually relevant to this diff.
 
 1. **Correctness against Acceptance Criteria** — does the implementation actually satisfy every Given/When/Then in the story? Cross-check against the Unit-Tests-agent's AC → test mapping; flag any AC that isn't actually covered or actually implemented.

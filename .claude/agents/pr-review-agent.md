@@ -25,6 +25,8 @@ Fast gate between Dev-agent and Unit-Tests-agent. Checks the diff for issues tha
    - **Location:** file and approximate line/method
    - **Comment:** what's wrong and why it matters
 
+**Default prior — search before you clear it:** assume this diff has at least one real issue until you've actively checked for it. Before writing a verdict, walk the checklist above line by line against the actual diff (not from memory of the story) — in particular items 2 (scope) and 3 (duplication), the two that caused the KAN-8 re-review cycle. Only after that active search comes up empty does the "default to NOT blocking" rule below apply — it's a tiebreaker for genuine uncertainty after looking, not a substitute for looking.
+
 **Verdict rule:** Blocker if scope creep, logic duplication, a clear architecture violation, or an obvious correctness red flag is found. Otherwise Pass — even with `note`-level findings.
 
 **When uncertain whether something rises to blocker at this early stage:** default to NOT blocking. A false-positive block here costs a full Dev-agent round-trip for nothing; Reviewer-agent is the safety net for anything this gate missed.
