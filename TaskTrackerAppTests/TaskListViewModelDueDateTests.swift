@@ -210,14 +210,20 @@ final class TaskListViewModelDueDateTests: XCTestCase {
         XCTAssertNil(fakeStorage.lastSavedTasks?.first?.dueDate)
     }
 
-    // MARK: - duplicateTask interaction (PR-review-agent non-blocking note):
-    // `duplicateTask` routes through `addTask(title:)` only, so a task's due
-    // date is not carried over to its duplicate — mirrors the pre-existing
-    // behavior of not copying `isCompleted` either. Documented here as
-    // current, intentional-looking behavior; flagged for Reviewer-agent since
-    // no KAN-19 AC states this either way.
+    // MARK: - duplicateTask interaction (superseded by KAN-20): this test
+    // previously documented that `duplicateTask` routed through
+    // `addTask(title:)` only, so a due date was NOT carried over to a
+    // duplicate. KAN-20 decided and implemented the opposite — `duplicateTask`
+    // now forwards `source.dueDate` into `addTask(title:dueDate:)` — so this
+    // test is updated in place to match, rather than left describing
+    // pre-KAN-20 behavior the app no longer has. The full KAN-20 TC-01
+    // through TC-08 suite lives in `TaskListViewModelDuplicateDueDateTests.swift`;
+    // this one is kept here as a narrower, complementary check that an
+    // already-normalized due date flows through the duplicate path without
+    // any further alteration (e.g. re-normalization) beyond what `addTask`
+    // already applies.
 
-    func test_duplicateTask_ofTaskWithDueDate_doesNotCopyDueDateToDuplicate() {
+    func test_duplicateTask_ofTaskWithDueDate_copiesAlreadyNormalizedDueDateToDuplicateUnaltered() {
         // Arrange
         let pickedDate = Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 3))!
         sut.addTask(title: "Buy milk", dueDate: pickedDate)
@@ -228,6 +234,6 @@ final class TaskListViewModelDueDateTests: XCTestCase {
 
         // Assert
         XCTAssertEqual(sut.tasks[0].dueDate, pickedDate, "original task's due date must be unaffected")
-        XCTAssertNil(sut.tasks[1].dueDate, "duplicate must not inherit the source's due date")
+        XCTAssertEqual(sut.tasks[1].dueDate, pickedDate, "duplicate must inherit the source's due date (KAN-20)")
     }
 }

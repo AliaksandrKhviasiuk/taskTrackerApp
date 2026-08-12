@@ -180,16 +180,18 @@ final class TaskListViewModel {
         }
     }
 
-    /// Creates a copy of the task with the given ID (same title, not
-    /// completed) and appends it via the same `addTask` path every other
-    /// creation goes through (KAN-5's single-validation-path rule) — the
-    /// source title is already valid/trimmed, so this always succeeds.
-    /// No-op if `taskID` doesn't match a task in `tasks` (e.g. it's mid a
-    /// pending deletion and already hidden from the View).
+    /// Creates a copy of the task with the given ID (same title and due
+    /// date, not completed — KAN-20 forwards `source.dueDate`, isCompleted
+    /// duplication itself is unchanged from KAN-14) and appends it via the
+    /// same `addTask` path every other creation goes through (KAN-5's
+    /// single-validation-path rule) — the source title is already
+    /// valid/trimmed, so this always succeeds. No-op if `taskID` doesn't
+    /// match a task in `tasks` (e.g. it's mid a pending deletion and already
+    /// hidden from the View).
     @discardableResult
     func duplicateTask(id taskID: TaskItem.ID) -> Bool {
         guard let source = tasks.first(where: { $0.id == taskID }) else { return false }
-        return addTask(title: source.title)
+        return addTask(title: source.title, dueDate: source.dueDate)
     }
 
     func toggleCompletion(for taskID: TaskItem.ID) {
