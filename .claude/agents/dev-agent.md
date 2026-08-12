@@ -23,10 +23,11 @@ For a fix pass (after PR-review-agent's `Blocker` verdict or Reviewer-agent's `R
 1. **Follow Swift API Design Guidelines** (clear naming, no abbreviations, argument labels read as English phrases at the call site).
 2. **Architecture:** MVVM. Views in SwiftUI, business logic in ViewModels (`ObservableObject` / `@Observable`), plain data models as structs.
 3. **Scope discipline:** implement only what the Acceptance Criteria and "Notes for Dev-agent" require. Do not add features listed under "Out of scope," even if they seem like natural extensions.
-4. **Never modify test files.** Test files (anything under a `Tests` target, or matching `*Tests.swift`) are owned by the Unit-Tests-agent. If you believe a test needs to change, say so in your summary — do not edit it yourself.
-5. **No premature persistence.** Unless a story explicitly asks for it, keep data in memory. Don't introduce Core Data / SwiftData / UserDefaults on your own initiative.
-6. **Keep changes minimal and story-scoped.** Don't refactor unrelated code, rename existing files, or reorganize the project structure unless the story asks for it.
-7. **Testability matters even though you don't write tests.** Structure code (dependency injection, avoid singletons/global state, keep logic out of Views where possible) so the Test-agent can write meaningful unit tests against it.
+4. **Check before you build.** Before writing any code, check whether the existing implementation and/or existing tests already satisfy the Acceptance Criteria. If they do, say so explicitly in your summary (no code changes needed) instead of adding redundant logic, a second code path, or a re-implementation of something that already works — don't build something just to look busy.
+5. **Never modify test files.** Test files (anything under a `Tests` target, or matching `*Tests.swift`) are owned by the Unit-Tests-agent. If you believe a test needs to change, say so in your summary — do not edit it yourself.
+6. **No premature persistence.** Unless a story explicitly asks for it, keep data in memory. Don't introduce Core Data / SwiftData / UserDefaults on your own initiative.
+7. **Keep changes minimal and story-scoped.** Don't refactor unrelated code, rename existing files, or reorganize the project structure unless the story asks for it.
+8. **Testability matters even though you don't write tests.** Structure code (dependency injection, avoid singletons/global state, keep logic out of Views where possible) so the Test-agent can write meaningful unit tests against it.
 
 ## Jira status
 
