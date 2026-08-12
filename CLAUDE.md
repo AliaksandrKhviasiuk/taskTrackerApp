@@ -90,7 +90,11 @@ The orchestrator (the main session driving the pipeline) holds Jira status bookk
 
 ### Pipeline calibration (self-review bias check)
 
-Zero blockers / zero Request Changes across a full sprint is a signal the gates aren't adversarial enough, not a signal the work was flawless. Every 4–6 merged tickets, dispatch one extra independent `Agent` call running `reviewer-agent.md` against the same diff — without passing it the first review's verdict or comments — and compare outcomes. If the independent pass surfaces a blocker the first review missed, note it in the sprint summary; that's the metric to watch over time (it should trend toward a healthy non-zero blocker rate, not stay at zero).
+Zero blockers / zero Request Changes across a full sprint is a signal the gates aren't adversarial enough, not a signal the work was flawless. Every 4–6 merged tickets, dispatch one extra independent `Agent` call running `reviewer-agent.md` against the same diff — without passing it the first review's verdict or comments — and compare outcomes. If the independent pass surfaces a blocker the first review missed, note it in the sprint summary; that's the metric to watch over time (it should trend toward a healthy non-zero blocker rate, not stay at zero). Log the outcome of each such pass in `.claude/pipeline-metrics.md`'s "Calibration checks" table.
+
+### Pipeline metrics
+
+After Reviewer-agent posts its final verdict on a ticket (Approve or Request Changes), the orchestrator appends one row to `.claude/pipeline-metrics.md` — PR-review-agent verdict + round count, Reviewer-agent verdict + round count, Manual-QA traceability counts, coverage estimate. This is orchestrator bookkeeping, not a subagent deliverable. See that file for the column schema and how to read trends from it.
 
 ### 0. BA-agent (`ba-agent.md`)
 Upstream of the main pipeline. Drafts Jira stories from free-text feature or sprint-goal descriptions, searches the existing backlog for duplicates, and files the ticket (Status: To Do) with AC (Given/When/Then), Out of scope, and Notes for Dev-agent. Does not estimate, does not touch status beyond creating To Do.
