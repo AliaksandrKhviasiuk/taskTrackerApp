@@ -14,6 +14,12 @@ struct ContentView: View {
     @State private var hasNewTaskDueDate = false
     @State private var newTaskDueDate = Date()
     @State private var editingTask: TaskItem?
+
+    /// Drives the due-date edit sheet (KAN-22). Triggered via a long-press
+    /// context menu on the row — distinct from tap-to-complete (KAN-3), the
+    /// leading edit-title/duplicate swipe (KAN-8/KAN-14), and the trailing
+    /// delete swipe (KAN-4/KAN-46), per the AC's non-collision requirement.
+    @State private var editingDueDateTask: TaskItem?
     @FocusState private var isTitleFieldFocused: Bool
 
     var body: some View {
@@ -72,6 +78,16 @@ struct ContentView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    editingDueDateTask = task
+                                } label: {
+                                    Label(
+                                        task.dueDate == nil ? "Set Due Date" : "Edit Due Date",
+                                        systemImage: "calendar"
+                                    )
+                                }
+                            }
                             .swipeActions(edge: .leading) {
                                 Button {
                                     editingTask = task
@@ -120,6 +136,11 @@ struct ContentView: View {
             .sheet(item: $editingTask) { task in
                 EditTaskSheet(task: task, viewModel: viewModel) {
                     editingTask = nil
+                }
+            }
+            .sheet(item: $editingDueDateTask) { task in
+                EditDueDateSheet(task: task, viewModel: viewModel) {
+                    editingDueDateTask = nil
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -285,6 +306,55 @@ private struct EditTaskSheet: View {
                 }
             }
             .onAppear { isTitleFieldFocused = true }
+        }
+    }
+}
+
+/// Due-date-only edit sheet (KAN-22), opened via the row's context menu.
+/// Reuses the same Toggle + date-only `DatePicker` shape the add-task row
+/// uses for a due date at creation time (KAN-19) — an off toggle on Save
+/// clears the due date, satisfying the AC's "clear" case.
+private struct EditDueDateSheet: View {
+    let task: TaskItem
+    let viewModel: TaskListViewModel
+    let onDismiss: () -> Void
+
+    @State private var hasDueDate: Bool
+    @State private var dueDate: Date
+
+    init(task: TaskItem, viewModel: TaskListViewModel, onDismiss: @escaping () -> Void) {
+        self.task = task
+        self.viewModel = viewModel
+        self.onDismiss = onDismiss
+        _hasDueDate = State(initialValue: task.dueDate != nil)
+        _dueDate = State(initialValue: task.dueDate ?? Date())
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("Due Date", isOn: $hasDueDate.animation())
+
+                    if hasDueDate {
+                        DatePicker("Due Date", selection: $dueDate, displayedComponents: .date)
+                            .labelsHidden()
+                    }
+                }
+            }
+            .navigationTitle("Due Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onDismiss)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        viewModel.updateDueDate(for: task.id, to: hasDueDate ? dueDate : nil)
+                        onDismiss()
+                    }
+                }
+            }
         }
     }
 }

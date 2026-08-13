@@ -160,6 +160,23 @@ final class TaskListViewModel {
         return true
     }
 
+    /// Updates (or clears, when `newDueDate` is `nil`) the due date of an
+    /// existing task (KAN-22, extending KAN-19's creation-only due date to
+    /// existing tasks). Mirrors `updateTitle(for:to:)`'s ViewModel-owns-the-
+    /// mutation shape, but unlike a title edit this isn't validated (any
+    /// date, including a past one, is accepted per KAN-19's precedent) and
+    /// doesn't participate in the KAN-17 undo mechanism — the story doesn't
+    /// ask for it, so adding it would be an unrequested second behavior.
+    /// Returns `false` only if `taskID` doesn't match a task in `tasks`.
+    @discardableResult
+    func updateDueDate(for taskID: TaskItem.ID, to newDueDate: Date?) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else { return false }
+
+        tasks[index].dueDate = normalizedDueDate(newDueDate)
+        storage.save(tasks)
+        return true
+    }
+
     /// After an add or edit, resets only whichever of `filter`/`searchText`
     /// is actually hiding the affected task from `displayedTasks` — never
     /// both when only one is the cause, and never either when neither is
