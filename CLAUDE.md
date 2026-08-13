@@ -84,7 +84,7 @@ Full per-agent rules (input contract, output format, Jira status transitions, to
 
 The orchestrator (the main session driving the pipeline) holds Jira status bookkeeping, dispatches each role below, and makes gate/no-gate calls between stages. It does not write code, design test cases, or review diffs itself — every role is a genuinely separate `Agent` tool call, not a persona switch inside one continuous context. Specifically:
 
-- **Manual-QA-agent** and **Dev-agent** are dispatched as two `Agent` calls in the *same* message (real parallelism, not sequential turns inside one head). Manual-QA-agent's call is given only the ticket's AC + Out of scope text — no repo access, no memory of other tickets this sprint — so its blindness to implementation is structural, not just a rule it's asked to follow.
+- **Manual-QA-agent** and **Dev-agent** are dispatched as two `Agent` calls in the *same* message (real parallelism, not sequential turns inside one head). Manual-QA-agent's call is given only the ticket's AC + Out of scope text — no repo access, no memory of other tickets this sprint, and no Jira read access of its own — so its blindness to implementation is structural, not just a rule it's asked to follow. Before dispatching it, the orchestrator itself checks the ticket's comments for a prior Manual-QA-agent comment (re-run case) and pastes that comment's text into the prompt if found; Manual-QA-agent never calls `getJiraIssue` itself, since Jira comments aren't scoped by author and a ticket that's been through a full cycle before will have PR-review-agent/Reviewer-agent comments with implementation details mixed in.
 - **Dev-agent**'s call uses `isolation: "worktree"`, so it works against an isolated git copy. PR-review-agent and Reviewer-agent then review the actual resulting diff/PR, not the orchestrator's recollection of writing it.
 - **PR-review-agent**, **Unit-Tests-agent**, and **Reviewer-agent** are likewise separate `Agent` calls, each given only the artifacts their input contract specifies (see their respective `.md` files) — not the full transcript of how those artifacts came to be.
 
@@ -106,7 +106,7 @@ A finding that is both **Critical** and **Needs human** gets the ticket labeled 
 Runs **after** BA-agent, **before** Manual-QA-agent/Dev-agent.
 
 ### 1. Manual-QA-agent (`manual-qa-agent.md`)
-**Starts from:** Jira AC and Out of scope only — deliberately blind to any implementation. Do not start on a ticket carrying the `needs-clarification` label.  
+**Starts from:** Jira AC and Out of scope only, plus (orchestrator-supplied, re-run only) the text of its own most recent prior comment — deliberately blind to any implementation, and has no Jira read access of its own. Do not start on a ticket carrying the `needs-clarification` label.  
 **Produces:** A Jira comment with a Markdown test-case table using `{ISSUE_KEY}-TC-{NN}` IDs.  
 Runs **in parallel** with Dev-agent; both start from the same ticket.
 
