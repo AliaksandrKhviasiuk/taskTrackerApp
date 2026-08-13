@@ -42,6 +42,13 @@ final class TaskListViewModel {
 
     var searchText: String = ""
 
+    /// Whether the list is sorted by due date, soonest first (KAN-24) — a
+    /// third independent axis alongside `filter` (KAN-9) and `searchText`
+    /// (KAN-13): it composes with both rather than replacing either, and is
+    /// deliberately never persisted (mirrors KAN-13's `searchText`
+    /// precedent — no `didSet` writing to storage here, unlike `filter`).
+    var isSortedByDueDate: Bool = false
+
     /// IDs of tasks that have been deleted from the display but not yet
     /// committed to `tasks`/storage — still recoverable via `undoDelete()`.
     private(set) var pendingDeletionTaskIDs: Set<TaskItem.ID> = []
@@ -96,10 +103,40 @@ final class TaskListViewModel {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// `filteredTasks` with any pending (not-yet-committed) deletions hidden.
+    /// Applies `isSortedByDueDate` (KAN-24) on top of the filter+search
+    /// subset from `filteredTasks` — the third independent axis, composing
+    /// with rather than replacing `filter`/`searchText`. When disabled,
+    /// passes `filteredTasks` through unchanged (today's existing
+    /// creation-order display, per KAN-2). When enabled, sorts soonest due
+    /// date first with tasks that have no due date placed last. Never
+    /// mutates or reorders `tasks` itself — this only changes what's
+    /// displayed, same guarantee `filteredTasks` already makes.
+    ///
+    /// Uses `sorted(by:)`, which is a stable sort, so tasks that compare
+    /// equal (the same due date, or both having none) keep their relative
+    /// order from `filteredTasks` — i.e. creation order — deterministically
+    /// across renders rather than shuffling.
+    var sortedTasks: [TaskItem] {
+        guard isSortedByDueDate else { return filteredTasks }
+
+        return filteredTasks.sorted { lhs, rhs in
+            switch (lhs.dueDate, rhs.dueDate) {
+            case let (lhsDueDate?, rhsDueDate?):
+                return lhsDueDate < rhsDueDate
+            case (nil, .some):
+                return false
+            case (.some, nil):
+                return true
+            case (nil, nil):
+                return false
+            }
+        }
+    }
+
+    /// `sortedTasks` with any pending (not-yet-committed) deletions hidden.
     /// This is what the list should actually render.
     var displayedTasks: [TaskItem] {
-        filteredTasks.filter { !pendingDeletionTaskIDs.contains($0.id) }
+        sortedTasks.filter { !pendingDeletionTaskIDs.contains($0.id) }
     }
 
     var hasPendingDeletion: Bool { !pendingDeletionTaskIDs.isEmpty }

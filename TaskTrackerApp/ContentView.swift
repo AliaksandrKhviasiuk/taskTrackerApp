@@ -141,6 +141,17 @@ struct ContentView: View {
                         }
                     }
                 }
+                if !viewModel.tasks.isEmpty {
+                    // (KAN-24) Sort toggle — a continuous dimension, so a
+                    // toggle rather than a new TaskFilter case. Composes with
+                    // the existing status filter and search independently.
+                    ToolbarItem(placement: .secondaryAction) {
+                        Toggle(isOn: $viewModel.isSortedByDueDate) {
+                            Label("Sort by Due Date", systemImage: "arrow.up.arrow.down")
+                        }
+                        .toggleStyle(.button)
+                    }
+                }
             }
             .sheet(item: $editingTask) { task in
                 EditTaskSheet(task: task, viewModel: viewModel) {
