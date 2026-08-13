@@ -87,8 +87,16 @@ struct ContentView: View {
                                 }
                                 .tint(.indigo)
                             }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    if let index = viewModel.displayedTasks.firstIndex(where: { $0.id == task.id }) {
+                                        viewModel.deleteTask(at: IndexSet(integer: index))
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
-                        .onDelete(perform: viewModel.deleteTask)
                     }
                 }
             }
