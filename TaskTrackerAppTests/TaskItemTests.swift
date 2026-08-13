@@ -193,4 +193,171 @@ final class TaskItemTests: XCTestCase {
         // Assert
         XCTAssertNotEqual(withoutDueDate, withDueDate)
     }
+
+    // MARK: - AC: overdue determination (KAN-23)
+    //
+    // TaskItem.isOverdue is a pure derived value of (isCompleted, dueDate) evaluated
+    // against "now" — tests use dates relative to today (via `daysFromToday`) rather
+    // than fixed calendar dates so they remain valid on any run date.
+
+    /// Returns a `Date` `days` calendar days from today's start-of-day, matching the
+    /// start-of-day storage convention `TaskListViewModel` normalizes `dueDate` to
+    /// (KAN-19/22). Passing `0` yields today; negative values are in the past.
+    private func daysFromToday(_ days: Int) -> Date {
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        return Calendar.current.date(byAdding: .day, value: days, to: startOfToday)!
+    }
+
+    func test_KAN23TC01_isOverdue_notCompletedWithDueDateYesterday_isOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: daysFromToday(-1))
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertTrue(result)
+    }
+
+    func test_KAN23TC02_isOverdue_notCompletedWithDueDateMonthsAgo_isOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: daysFromToday(-90))
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertTrue(result)
+    }
+
+    func test_KAN23TC03_isOverdue_completedWithDueDateBeforeToday_notOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: true, dueDate: daysFromToday(-1))
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN23TC04_isOverdue_notCompletedWithNoDueDate_notOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: nil)
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN23TC05_isOverdue_completedWithNoDueDate_notOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: true, dueDate: nil)
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN23TC06_isOverdue_notCompletedWithDueDateToday_notOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: daysFromToday(0))
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN23TC07_isOverdue_completedWithDueDateToday_notOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: true, dueDate: daysFromToday(0))
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN23TC08_isOverdue_notCompletedWithDueDateTomorrow_notOverdue() {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: daysFromToday(1))
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertFalse(result)
+    }
+
+    func test_KAN23TC09_isOverdue_mixedSetOfTasks_flagsOnlyNotCompletedTasksWithPastDueDate() {
+        // Arrange
+        let overdueTask = TaskItem(title: "Overdue", isCompleted: false, dueDate: daysFromToday(-1))
+        let dueTodayTask = TaskItem(title: "Due today", isCompleted: false, dueDate: daysFromToday(0))
+        let dueFutureTask = TaskItem(title: "Due future", isCompleted: false, dueDate: daysFromToday(1))
+        let completedPastDueTask = TaskItem(title: "Completed past due", isCompleted: true, dueDate: daysFromToday(-1))
+        let noDueDateNotCompletedTask = TaskItem(title: "No due date", isCompleted: false, dueDate: nil)
+        let noDueDateCompletedTask = TaskItem(title: "No due date, completed", isCompleted: true, dueDate: nil)
+        let tasks = [overdueTask, dueTodayTask, dueFutureTask, completedPastDueTask, noDueDateNotCompletedTask, noDueDateCompletedTask]
+
+        // Act
+        let overdueIDs = tasks.filter(\.isOverdue).map(\.id)
+
+        // Assert
+        XCTAssertEqual(overdueIDs, [overdueTask.id])
+    }
+
+    func test_KAN23TC10_isOverdue_completingAPreviouslyOverdueTask_stopsBeingFlagged() {
+        // Arrange
+        var task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: daysFromToday(-1))
+        XCTAssertTrue(task.isOverdue, "precondition: task should start out overdue")
+
+        // Act
+        task.isCompleted = true
+
+        // Assert
+        XCTAssertFalse(task.isOverdue)
+    }
+
+    // MARK: - isOverdue and the normalizedDueDate storage convention (KAN-19/22)
+    //
+    // `dueDate` is normalized to `Calendar.current.startOfDay(for:)` before it's ever
+    // stored on a TaskItem (see `TaskListViewModel`'s add/update paths), so isOverdue
+    // itself never needs to normalize its `dueDate` input. These two tests construct
+    // TaskItem directly with an un-normalized (time-of-day-bearing) dueDate — bypassing
+    // that ViewModel-layer normalization — to confirm isOverdue still produces the
+    // correct calendar-day result. It does, because the comparison is always against
+    // `Calendar.current.startOfDay(for: Date())` (today's start-of-day), not against
+    // `dueDate`'s own start-of-day, so any time-of-day component on `dueDate` is
+    // irrelevant to the outcome.
+
+    func test_isOverdue_notCompletedWithUnnormalizedDueDateLateYesterday_isOverdue() {
+        // Arrange
+        let lateYesterday = Calendar.current.date(byAdding: .hour, value: 23, to: daysFromToday(-1))!
+        let task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: lateYesterday)
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertTrue(result)
+    }
+
+    func test_isOverdue_notCompletedWithUnnormalizedDueDateMiddayToday_notOverdue() {
+        // Arrange
+        let middayToday = Calendar.current.date(byAdding: .hour, value: 12, to: daysFromToday(0))!
+        let task = TaskItem(title: "Buy milk", isCompleted: false, dueDate: middayToday)
+
+        // Act
+        let result = task.isOverdue
+
+        // Assert
+        XCTAssertFalse(result)
+    }
 }

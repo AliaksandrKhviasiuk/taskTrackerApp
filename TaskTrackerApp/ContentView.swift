@@ -67,9 +67,18 @@ struct ContentView: View {
                                         // (KAN-19) Only shown when the task has a due date —
                                         // no placeholder for tasks without one.
                                         if let dueDate = task.dueDate {
-                                            Text(dueDate, style: .date)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                            HStack(spacing: 4) {
+                                                // (KAN-23) Icon + color cue for overdue tasks —
+                                                // display only, doesn't affect list order.
+                                                if task.isOverdue {
+                                                    Image(systemName: "exclamationmark.circle.fill")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.red)
+                                                }
+                                                Text(dueDate, style: .date)
+                                                    .font(.caption)
+                                                    .foregroundStyle(task.isOverdue ? .red : .secondary)
+                                            }
                                         }
                                     }
                                 } icon: {
