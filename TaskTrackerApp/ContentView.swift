@@ -9,10 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = TaskListViewModel(storage: FileTaskStore(), filterStorage: UserDefaultsFilterStore())
-    @State private var isAddingTask = false
     @State private var newTaskTitle = ""
-    @State private var hasNewTaskDueDate = false
-    @State private var newTaskDueDate = Date()
     @State private var editingTask: TaskItem?
 
     /// Drives the due-date edit sheet (KAN-22). Triggered via a long-press
@@ -22,13 +19,13 @@ struct ContentView: View {
     @State private var editingDueDateTask: TaskItem?
     @FocusState private var isTitleFieldFocused: Bool
 
+    /// Stable id for the trailing add-task row (KAN-43), so `ScrollViewReader`
+    /// can scroll it into view regardless of how many task rows precede it.
+    private static let addTaskRowID = "addTaskRow"
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if isAddingTask {
-                    addTaskRow
-                }
-
                 if !viewModel.tasks.isEmpty {
                     Picker("Filter", selection: $viewModel.filter) {
                         ForEach(TaskFilter.allCases) { filter in
@@ -40,100 +37,114 @@ struct ContentView: View {
                     .padding(.top, 8)
                 }
 
-                if viewModel.tasks.isEmpty {
-                    ContentUnavailableView(
-                        "No Tasks Yet",
-                        systemImage: "checklist",
-                        description: Text("Tap \"Add Task\" to create your first task.")
-                    )
-                } else if viewModel.displayedTasks.isEmpty {
-                    ContentUnavailableView(
-                        "No Matching Tasks",
-                        systemImage: "line.3.horizontal.decrease.circle",
-                        description: Text(noMatchingTasksDescription)
-                    )
-                } else {
+                // (KAN-43) `addTaskRow` below is always a real trailing row
+                // inside this same `List` — the empty states, the status
+                // filter (KAN-9), search (KAN-13), and due-date sort (KAN-24)
+                // only affect the branch above it, never whether it renders.
+                ScrollViewReader { proxy in
                     List {
-                        ForEach(viewModel.displayedTasks) { task in
-                            Button {
-                                viewModel.toggleCompletion(for: task.id)
-                            } label: {
-                                Label {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(task.title)
-                                            .strikethrough(task.isCompleted)
-                                            .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                        if viewModel.tasks.isEmpty {
+                            ContentUnavailableView(
+                                "No Tasks Yet",
+                                systemImage: "checklist",
+                                description: Text("Type a title below to create your first task.")
+                            )
+                            .listRowSeparator(.hidden)
+                        } else if viewModel.displayedTasks.isEmpty {
+                            ContentUnavailableView(
+                                "No Matching Tasks",
+                                systemImage: "line.3.horizontal.decrease.circle",
+                                description: Text(noMatchingTasksDescription)
+                            )
+                            .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(viewModel.displayedTasks) { task in
+                                Button {
+                                    viewModel.toggleCompletion(for: task.id)
+                                } label: {
+                                    Label {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(task.title)
+                                                .strikethrough(task.isCompleted)
+                                                .foregroundStyle(task.isCompleted ? .secondary : .primary)
 
-                                        // (KAN-19) Only shown when the task has a due date —
-                                        // no placeholder for tasks without one.
-                                        if let dueDate = task.dueDate {
-                                            HStack(spacing: 4) {
-                                                // (KAN-23) Icon + color cue for overdue tasks —
-                                                // display only, doesn't affect list order.
-                                                if task.isOverdue {
-                                                    Image(systemName: "exclamationmark.circle.fill")
+                                            // (KAN-19) Only shown when the task has a due date —
+                                            // no placeholder for tasks without one.
+                                            if let dueDate = task.dueDate {
+                                                HStack(spacing: 4) {
+                                                    // (KAN-23) Icon + color cue for overdue tasks —
+                                                    // display only, doesn't affect list order.
+                                                    if task.isOverdue {
+                                                        Image(systemName: "exclamationmark.circle.fill")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.red)
+                                                    }
+                                                    Text(dueDate, style: .date)
                                                         .font(.caption)
-                                                        .foregroundStyle(.red)
+                                                        .foregroundStyle(task.isOverdue ? .red : .secondary)
                                                 }
-                                                Text(dueDate, style: .date)
-                                                    .font(.caption)
-                                                    .foregroundStyle(task.isOverdue ? .red : .secondary)
                                             }
                                         }
+                                    } icon: {
+                                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(task.isCompleted ? .green : .secondary)
                                     }
-                                } icon: {
-                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(task.isCompleted ? .green : .secondary)
                                 }
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button {
-                                    editingDueDateTask = task
-                                } label: {
-                                    Label(
-                                        task.dueDate == nil ? "Set Due Date" : "Edit Due Date",
-                                        systemImage: "calendar"
-                                    )
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button {
+                                        editingDueDateTask = task
+                                    } label: {
+                                        Label(
+                                            task.dueDate == nil ? "Set Due Date" : "Edit Due Date",
+                                            systemImage: "calendar"
+                                        )
+                                    }
                                 }
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    editingTask = task
-                                } label: {
-                                    Label("Edit", systemImage: "pencil")
-                                }
-                                .tint(.blue)
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        editingTask = task
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    .tint(.blue)
 
-                                Button {
-                                    viewModel.duplicateTask(id: task.id)
-                                } label: {
-                                    Label("Duplicate", systemImage: "doc.on.doc")
-                                }
-                                .tint(.indigo)
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    if let index = viewModel.displayedTasks.firstIndex(where: { $0.id == task.id }) {
-                                        viewModel.deleteTask(at: IndexSet(integer: index))
+                                    Button {
+                                        viewModel.duplicateTask(id: task.id)
+                                    } label: {
+                                        Label("Duplicate", systemImage: "doc.on.doc")
                                     }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    .tint(.indigo)
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        if let index = viewModel.displayedTasks.firstIndex(where: { $0.id == task.id }) {
+                                            viewModel.deleteTask(at: IndexSet(integer: index))
+                                        }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
+
+                        addTaskRow
+                    }
+                    .onAppear {
+                        // (KAN-43) KAN-44's reveal trigger doesn't exist yet, so
+                        // the row is always visible today — this is the closest
+                        // available "revealed" moment to auto-scroll to it and
+                        // focus its title field. Once KAN-44 adds a real reveal
+                        // action, this should move to fire from that action
+                        // instead of on every appearance of the screen.
+                        isTitleFieldFocused = true
+                        proxy.scrollTo(Self.addTaskRowID, anchor: .bottom)
                     }
                 }
             }
             .navigationTitle("Tasks")
             .searchable(text: $viewModel.searchText, prompt: "Search tasks")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Add Task") {
-                        isAddingTask = true
-                        isTitleFieldFocused = true
-                    }
-                }
                 if viewModel.hasCompletedTasks {
                     ToolbarItem(placement: .secondaryAction) {
                         Button("Clear Completed", role: .destructive) {
@@ -220,59 +231,43 @@ struct ContentView: View {
         }
     }
 
+    /// (KAN-43) Auto-committing trailing row inside the task `List`: losing
+    /// focus with a non-empty title creates the task through the same
+    /// `isValidTitle`/`addTask` path every other creation entry point uses
+    /// (KAN-5's single-validation-path rule), while an empty title is
+    /// silently discarded with no error shown. No Confirm/Cancel controls —
+    /// the story explicitly removes them. Due-date input is deliberately not
+    /// part of this row yet (that's KAN-45, next in this sub-sprint).
     private var addTaskRow: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                TextField("Task title", text: $newTaskTitle)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isTitleFieldFocused)
-                    .onSubmit(confirmNewTask)
-                    .onChange(of: newTaskTitle) {
-                        newTaskTitle = TaskListViewModel.cappedTitle(newTaskTitle)
-                    }
-
-                Button("Confirm", action: confirmNewTask)
-                    .disabled(!TaskListViewModel.isValidTitle(newTaskTitle))
-
-                Button("Cancel", role: .cancel) {
-                    cancelNewTask()
+        Label {
+            TextField("New Task", text: $newTaskTitle)
+                .focused($isTitleFieldFocused)
+                .onChange(of: newTaskTitle) {
+                    newTaskTitle = TaskListViewModel.cappedTitle(newTaskTitle)
                 }
-            }
-
-            // (KAN-19) Optional due date, date-only — no time picker.
-            Toggle("Due Date", isOn: $hasNewTaskDueDate.animation())
-
-            if hasNewTaskDueDate {
-                DatePicker("Due Date", selection: $newTaskDueDate, displayedComponents: .date)
-                    .labelsHidden()
-            }
-
-            if let validationMessage = viewModel.validationMessage {
-                Text(validationMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
+                .onSubmit(commitOrDiscardNewTask)
+        } icon: {
+            Image(systemName: "plus.circle")
+                .foregroundStyle(.secondary)
         }
-        .padding()
+        .id(Self.addTaskRowID)
+        .onChange(of: isTitleFieldFocused) { _, isFocused in
+            guard !isFocused else { return }
+            commitOrDiscardNewTask()
+        }
     }
 
-    private func confirmNewTask() {
-        let dueDate = hasNewTaskDueDate ? newTaskDueDate : nil
-        guard viewModel.addTask(title: newTaskTitle, dueDate: dueDate) else { return }
-        resetNewTaskInput()
-    }
-
-    private func cancelNewTask() {
-        viewModel.validationMessage = nil
-        resetNewTaskInput()
-    }
-
-    private func resetNewTaskInput() {
+    /// Commits the row's current title as a new task when it passes the same
+    /// `isValidTitle` check every other creation path uses (KAN-5), or
+    /// silently discards it otherwise. Checks validity itself rather than
+    /// calling `addTask` unconditionally and inspecting its result, so the
+    /// empty-title/lose-focus case never sets `viewModel.validationMessage`
+    /// and therefore never surfaces an error, per the AC.
+    private func commitOrDiscardNewTask() {
+        if TaskListViewModel.isValidTitle(newTaskTitle) {
+            viewModel.addTask(title: newTaskTitle)
+        }
         newTaskTitle = ""
-        hasNewTaskDueDate = false
-        newTaskDueDate = Date()
-        isAddingTask = false
-        isTitleFieldFocused = false
     }
 }
 
@@ -331,8 +326,7 @@ private struct EditTaskSheet: View {
 }
 
 /// Due-date-only edit sheet (KAN-22), opened via the row's context menu.
-/// Reuses the same Toggle + date-only `DatePicker` shape the add-task row
-/// uses for a due date at creation time (KAN-19) — an off toggle on Save
+/// Uses a Toggle + date-only `DatePicker` shape — an off toggle on Save
 /// clears the due date, satisfying the AC's "clear" case.
 private struct EditDueDateSheet: View {
     let task: TaskItem
