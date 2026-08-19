@@ -29,6 +29,7 @@ A rate that stays at 0% for a stretch is itself a signal — see the "Pipeline c
 | KAN-22 | 2026-08-13 | Pass (1 round) | Approve (1 round) | 6/6/12 | ~100% of new `updateDueDate` method |
 | KAN-23 | 2026-08-14 | Pass (1 round) | Approve (1 round) | 10/0/10 | ~100% of new `isOverdue` property |
 | KAN-24 | 2026-08-14 | Pass (1 round) | Approve (1 round) | 15/0/15 | 99.55% (`TaskListViewModel.swift`, xccov-measured) |
+| KAN-43 | 2026-08-19 | Pass (1 round) | Approve (1 round) | 0/15/15 | N/A — zero new lines in ViewModel/Model layer, pure View-layer add-task-row rewrite |
 
 ## Calibration checks (independent re-review, every 4-6 tickets)
 
