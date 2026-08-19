@@ -12,6 +12,18 @@ struct ContentView: View {
     @State private var newTaskTitle = ""
     @State private var editingTask: TaskItem?
 
+    /// Due date staged for the in-progress new task (KAN-45) — `nil` until
+    /// the "Due Date" pill is used, matching `addTask(title:dueDate:)`'s
+    /// optional parameter. Lives only in this row's local state; nothing is
+    /// persisted until `commitOrDiscardNewTask()` actually creates the task.
+    @State private var newTaskDueDate: Date?
+
+    /// Whether `dueDatePickerSheet` is currently presented (KAN-45). Doubles
+    /// as the guard that prevents `commitOrDiscardNewTask()` from firing
+    /// prematurely when the sheet's presentation steals focus from the title
+    /// field — see `addTaskRow`'s `onChange(of: isTitleFieldFocused)`.
+    @State private var isDueDatePickerPresented = false
+
     /// Drives the due-date edit sheet (KAN-22). Triggered via a long-press
     /// context menu on the row — distinct from tap-to-complete (KAN-3), the
     /// leading edit-title/duplicate swipe (KAN-8/KAN-14), and the trailing
@@ -174,6 +186,19 @@ struct ContentView: View {
                     editingDueDateTask = nil
                 }
             }
+            .sheet(isPresented: $isDueDatePickerPresented, onDismiss: {
+                // (KAN-45) Refocus the title field once the picker closes,
+                // regardless of how it closed (Clear, Done, or swipe-to-
+                // dismiss). The sheet's own presentation is what resigned
+                // the title field's focus in the first place (see the risk
+                // this solves in `addTaskRow`'s onChange), so this restores
+                // the row to the same "still being edited" state the user
+                // was in before tapping the pill, letting a later real
+                // blur/tap-away commit or discard the row normally.
+                isTitleFieldFocused = true
+            }) {
+                dueDatePickerSheet
+            }
             .safeAreaInset(edge: .bottom) {
                 if viewModel.hasPendingDeletion || viewModel.hasPendingEdit {
                     undoBanner
@@ -236,38 +261,115 @@ struct ContentView: View {
     /// `isValidTitle`/`addTask` path every other creation entry point uses
     /// (KAN-5's single-validation-path rule), while an empty title is
     /// silently discarded with no error shown. No Confirm/Cancel controls —
-    /// the story explicitly removes them. Due-date input is deliberately not
-    /// part of this row yet (that's KAN-45, next in this sub-sprint).
+    /// the story explicitly removes them. Due-date input (KAN-45) lives in
+    /// `dueDatePill`, shown beneath the title.
+    ///
+    /// **Premature-commit risk (KAN-45):** presenting `dueDatePickerSheet`
+    /// resigns the title `TextField`'s focus (sheet presentation dismisses
+    /// the keyboard), which would otherwise fire `commitOrDiscardNewTask()`
+    /// via the `onChange` below before a due date is ever picked — creating
+    /// the task early, with no due date, out from under the still-open
+    /// picker. The `onChange` guards on `isDueDatePickerPresented` (set true
+    /// the instant the pill is tapped, in the same state update that later
+    /// presents the sheet) so that focus loss caused by opening/using the
+    /// picker is ignored; `onDismiss` on the sheet then refocuses the title
+    /// field, restoring the row to its pre-tap editing state so a later
+    /// genuine blur commits or discards normally.
     private var addTaskRow: some View {
         Label {
-            TextField("New Task", text: $newTaskTitle)
-                .focused($isTitleFieldFocused)
-                .onChange(of: newTaskTitle) {
-                    newTaskTitle = TaskListViewModel.cappedTitle(newTaskTitle)
-                }
-                .onSubmit(commitOrDiscardNewTask)
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("New Task", text: $newTaskTitle)
+                    .focused($isTitleFieldFocused)
+                    .onChange(of: newTaskTitle) {
+                        newTaskTitle = TaskListViewModel.cappedTitle(newTaskTitle)
+                    }
+                    .onSubmit(commitOrDiscardNewTask)
+
+                dueDatePill
+            }
         } icon: {
             Image(systemName: "plus.circle")
                 .foregroundStyle(.secondary)
         }
         .id(Self.addTaskRowID)
         .onChange(of: isTitleFieldFocused) { _, isFocused in
-            guard !isFocused else { return }
+            guard !isFocused, !isDueDatePickerPresented else { return }
             commitOrDiscardNewTask()
         }
     }
 
-    /// Commits the row's current title as a new task when it passes the same
-    /// `isValidTitle` check every other creation path uses (KAN-5), or
-    /// silently discards it otherwise. Checks validity itself rather than
-    /// calling `addTask` unconditionally and inspecting its result, so the
-    /// empty-title/lose-focus case never sets `viewModel.validationMessage`
-    /// and therefore never surfaces an error, per the AC.
+    /// Tap-to-set due-date pill (KAN-45), replacing the pre-KAN-43
+    /// `Toggle("Due Date", ...)` pattern. Shows the lightweight "Due Date"
+    /// placeholder while `newTaskDueDate` is `nil`, or the chosen date once
+    /// one is picked. Tapping opens `dueDatePickerSheet`.
+    private var dueDatePill: some View {
+        Button {
+            isDueDatePickerPresented = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(newTaskDueDate?.formatted(date: .abbreviated, time: .omitted) ?? "Due Date")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Date-only picker sheet (KAN-45) for `dueDatePill`. Writes directly
+    /// into `newTaskDueDate` — nothing is persisted here, since the task
+    /// doesn't exist yet; `commitOrDiscardNewTask()` is what actually
+    /// creates it, passing `newTaskDueDate` through as `addTask`'s `dueDate`
+    /// argument. "Clear" is the AC's required discoverable way to remove an
+    /// already-set date back to "no due date."
+    private var dueDatePickerSheet: some View {
+        NavigationStack {
+            DatePicker(
+                "Due Date",
+                selection: Binding(
+                    get: { newTaskDueDate ?? Date() },
+                    set: { newTaskDueDate = $0 }
+                ),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .padding()
+            .navigationTitle("Due Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Clear") {
+                        newTaskDueDate = nil
+                        isDueDatePickerPresented = false
+                    }
+                    .disabled(newTaskDueDate == nil)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        isDueDatePickerPresented = false
+                    }
+                }
+            }
+        }
+    }
+
+    /// Commits the row's current title (and any staged `newTaskDueDate`,
+    /// KAN-45) as a new task when the title passes the same `isValidTitle`
+    /// check every other creation path uses (KAN-5), or silently discards
+    /// both otherwise. Checks validity itself rather than calling `addTask`
+    /// unconditionally and inspecting its result, so the empty-title/lose-
+    /// focus case never sets `viewModel.validationMessage` and therefore
+    /// never surfaces an error, per the AC.
     private func commitOrDiscardNewTask() {
         if TaskListViewModel.isValidTitle(newTaskTitle) {
-            viewModel.addTask(title: newTaskTitle)
+            viewModel.addTask(title: newTaskTitle, dueDate: newTaskDueDate)
         }
         newTaskTitle = ""
+        newTaskDueDate = nil
     }
 }
 
