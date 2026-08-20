@@ -194,6 +194,164 @@ final class TaskItemTests: XCTestCase {
         XCTAssertNotEqual(withoutDueDate, withDueDate)
     }
 
+    // MARK: - AC: a task can optionally have a priority attached (KAN-30)
+
+    func test_init_withoutPriorityArgument_defaultsToNilPriority() {
+        // Arrange
+        // no setup needed
+
+        // Act
+        let task = TaskItem(title: "Buy milk")
+
+        // Assert
+        XCTAssertNil(task.priority)
+    }
+
+    func test_init_withPriorityArgument_storesPriority() {
+        // Arrange
+        // no setup needed
+
+        // Act
+        let task = TaskItem(title: "Buy milk", priority: .high)
+
+        // Assert
+        XCTAssertEqual(task.priority, .high)
+    }
+
+    // MARK: - Priority: the fixed set of cases (KAN-30-TC-08's Model-level
+    // source of truth — ContentView's picker iterates `Priority.allCases`,
+    // so pinning its raw values/identity here also pins what the picker can
+    // ever offer and how it's persisted)
+
+    func test_KAN30TC08_priority_rawValues_matchExpectedDisplayStrings() {
+        // Arrange
+        // no setup needed
+
+        // Act / Assert
+        XCTAssertEqual(Priority.low.rawValue, "Low")
+        XCTAssertEqual(Priority.medium.rawValue, "Medium")
+        XCTAssertEqual(Priority.high.rawValue, "High")
+    }
+
+    func test_priority_id_equalsRawValue() {
+        // Arrange
+        // no setup needed
+
+        // Act / Assert
+        for priority in Priority.allCases {
+            XCTAssertEqual(priority.id, priority.rawValue, "priority \(priority) case")
+        }
+    }
+
+    // MARK: - Codable: priority round-trips through encode/decode (KAN-30),
+    // for each of the three fixed values
+
+    func test_encodeThenDecode_withEachPriorityValue_preservesPriority() throws {
+        for priority in Priority.allCases {
+            // Arrange
+            let task = TaskItem(title: "Buy milk", priority: priority)
+            let data = try JSONEncoder().encode(task)
+
+            // Act
+            let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+            // Assert
+            XCTAssertEqual(decoded.priority, priority, "priority \(priority) case")
+        }
+    }
+
+    func test_encodeThenDecode_withNilPriority_preservesNilPriority() throws {
+        // Arrange
+        let task = TaskItem(title: "Buy milk")
+        let data = try JSONEncoder().encode(task)
+
+        // Act
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+        // Assert
+        XCTAssertNil(decoded.priority)
+    }
+
+    // MARK: - Codable: a nil priority is omitted from the encoded JSON
+    // entirely (encodeIfPresent, mirroring dueDate's KAN-19 precedent) rather
+    // than encoded as an explicit null — this is exactly what makes
+    // pre-KAN-30 persisted JSON (which never had a "priority" key at all)
+    // already shaped like a task with no priority, so no migration is needed.
+
+    func test_encode_withNilPriority_omitsPriorityKeyFromJSON() throws {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", dueDate: Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 3)))
+
+        // Act
+        let data = try JSONEncoder().encode(task)
+        let jsonString = String(data: data, encoding: .utf8) ?? ""
+
+        // Assert
+        XCTAssertFalse(jsonString.contains("priority"), "a nil priority must be omitted from the encoded JSON, not written as an explicit null")
+    }
+
+    // MARK: - Codable: JSON persisted before KAN-30 (no "priority" key at
+    // all) still decodes successfully, as nil — same backward-compatibility
+    // guarantee KAN-19 established for "dueDate" (see
+    // test_decode_legacyJSONWithoutDueDateKey_decodesWithNilDueDate above),
+    // now re-verified for the newly-added "priority" key (Manual-QA-agent's
+    // note-for-Unit-Tests-agent flagged this as worth checking directly).
+
+    func test_decode_legacyJSONWithoutPriorityKey_decodesWithNilPriority() throws {
+        // Arrange
+        let id = UUID()
+        let legacyJSON = """
+        {"id":"\(id.uuidString)","title":"Buy milk","isCompleted":false}
+        """
+        let data = Data(legacyJSON.utf8)
+
+        // Act
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+        // Assert
+        XCTAssertEqual(decoded.id, id)
+        XCTAssertEqual(decoded.title, "Buy milk")
+        XCTAssertNil(decoded.priority)
+    }
+
+    // MARK: - Equatable: priority participates in equality (KAN-30)
+
+    func test_equality_withSamePriority_areEqual() {
+        // Arrange
+        let id = UUID()
+        let first = TaskItem(id: id, title: "Buy milk", priority: .medium)
+
+        // Act
+        let second = TaskItem(id: id, title: "Buy milk", priority: .medium)
+
+        // Assert
+        XCTAssertEqual(first, second)
+    }
+
+    func test_equality_withDifferentPriority_areNotEqual() {
+        // Arrange
+        let id = UUID()
+        let first = TaskItem(id: id, title: "Buy milk", priority: .low)
+
+        // Act
+        let second = TaskItem(id: id, title: "Buy milk", priority: .high)
+
+        // Assert
+        XCTAssertNotEqual(first, second)
+    }
+
+    func test_equality_withOneNilAndOneSetPriority_areNotEqual() {
+        // Arrange
+        let id = UUID()
+        let withoutPriority = TaskItem(id: id, title: "Buy milk")
+
+        // Act
+        let withPriority = TaskItem(id: id, title: "Buy milk", priority: .low)
+
+        // Assert
+        XCTAssertNotEqual(withoutPriority, withPriority)
+    }
+
     // MARK: - AC: overdue determination (KAN-23)
     //
     // TaskItem.isOverdue is a pure derived value of (isCompleted, dueDate) evaluated

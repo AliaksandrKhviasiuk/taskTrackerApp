@@ -39,6 +39,14 @@ struct ContentView: View {
     /// field — see `addTaskRow`'s `onChange(of: isTitleFieldFocused)`.
     @State private var isDueDatePickerPresented = false
 
+    /// Priority staged for the in-progress new task (KAN-30) — `nil` until
+    /// one of `priorityPills` is tapped, matching `addTask(title:dueDate:priority:)`'s
+    /// optional parameter. Lives only in this row's local state; nothing is
+    /// persisted until `commitOrDiscardNewTask()` actually creates the task.
+    /// Unlike `newTaskDueDate`, no `isDueDatePickerPresented`-style guard is
+    /// needed here — see `priorityPills`'s doc comment for why.
+    @State private var newTaskPriority: Priority?
+
     /// Drives the due-date edit sheet (KAN-22). Triggered via a long-press
     /// context menu on the row — distinct from tap-to-complete (KAN-3), the
     /// leading edit-title/duplicate swipe (KAN-8/KAN-14), and the trailing
@@ -70,6 +78,19 @@ struct ContentView: View {
     /// showing.
     private var isUndoBannerVisible: Bool {
         viewModel.hasPendingDeletion || viewModel.hasPendingEdit
+    }
+
+    /// Maps a `Priority` to its display color (KAN-30). Kept in the View
+    /// rather than on the `Priority` enum itself — `Task.swift` is a plain
+    /// model file that only imports `Foundation`, and adding a SwiftUI
+    /// `Color` dependency there would blur the model/view boundary this
+    /// codebase otherwise keeps clean.
+    private func color(for priority: Priority) -> Color {
+        switch priority {
+        case .low: .green
+        case .medium: .orange
+        case .high: .red
+        }
     }
 
     var body: some View {
@@ -113,9 +134,25 @@ struct ContentView: View {
                                 } label: {
                                     Label {
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(task.title)
-                                                .strikethrough(task.isCompleted)
-                                                .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                                            HStack(spacing: 6) {
+                                                Text(task.title)
+                                                    .strikethrough(task.isCompleted)
+                                                    .foregroundStyle(task.isCompleted ? .secondary : .primary)
+
+                                                // (KAN-30) Priority badge shown alongside the
+                                                // title, on the same line — omitted entirely
+                                                // (no placeholder/error) when the task has no
+                                                // priority, mirroring the due date's
+                                                // shown-only-when-set convention below.
+                                                if let priority = task.priority {
+                                                    Text(priority.rawValue)
+                                                        .font(.caption2.weight(.semibold))
+                                                        .foregroundStyle(.white)
+                                                        .padding(.horizontal, 6)
+                                                        .padding(.vertical, 2)
+                                                        .background(Capsule().fill(color(for: priority)))
+                                                }
+                                            }
 
                                             // (KAN-19) Only shown when the task has a due date —
                                             // no placeholder for tasks without one.
@@ -360,7 +397,8 @@ struct ContentView: View {
     /// (KAN-5's single-validation-path rule), while an empty title is
     /// silently discarded with no error shown. No Confirm/Cancel controls —
     /// the story explicitly removes them. Due-date input (KAN-45) lives in
-    /// `dueDatePill`, shown beneath the title.
+    /// `dueDatePill`, and priority input (KAN-30) in `priorityPills`, both
+    /// shown beneath the title.
     ///
     /// **Premature-commit risk (KAN-45):** presenting `dueDatePickerSheet`
     /// resigns the title `TextField`'s focus (sheet presentation dismisses
@@ -373,6 +411,16 @@ struct ContentView: View {
     /// picker is ignored; `onDismiss` on the sheet then refocuses the title
     /// field, restoring the row to its pre-tap editing state so a later
     /// genuine blur commits or discards normally.
+    ///
+    /// **Priority control (KAN-30) deliberately doesn't share this risk.**
+    /// `priorityPills` is a row of plain in-line `Button`s that write
+    /// directly to `newTaskPriority` — it never presents a sheet, full
+    /// screen cover, or any other modal. The KAN-45 bug's root cause was
+    /// specifically *modal presentation* resigning the title field's focus
+    /// as a side effect (see `dueDatePickerSheet`'s doc comment); a plain
+    /// button tap within the same row does not do that. So no
+    /// `isDueDatePickerPresented`-style guard was added for priority — the
+    /// `onChange` below only ever needs to special-case the due-date sheet.
     private var addTaskRow: some View {
         Label {
             VStack(alignment: .leading, spacing: 4) {
@@ -383,7 +431,10 @@ struct ContentView: View {
                     }
                     .onSubmit(commitOrDiscardNewTask)
 
-                dueDatePill
+                HStack(spacing: 8) {
+                    dueDatePill
+                    priorityPills
+                }
             }
         } icon: {
             Image(systemName: "plus.circle")
@@ -455,19 +506,49 @@ struct ContentView: View {
         }
     }
 
-    /// Commits the row's current title (and any staged `newTaskDueDate`,
-    /// KAN-45) as a new task when the title passes the same `isValidTitle`
-    /// check every other creation path uses (KAN-5), or silently discards
-    /// both otherwise. Checks validity itself rather than calling `addTask`
-    /// unconditionally and inspecting its result, so the empty-title/lose-
-    /// focus case never sets `viewModel.validationMessage` and therefore
-    /// never surfaces an error, per the AC.
+    /// Tap-to-select priority control (KAN-30) — a row of tappable pills,
+    /// one per `Priority` case, rather than a `Picker`/sheet-based control.
+    /// Tapping the already-selected pill deselects it (back to "no
+    /// priority"), so the row stays fully usable without a separate
+    /// clear affordance. See `addTaskRow`'s doc comment for why this shape
+    /// avoids KAN-45's premature-commit risk: nothing here presents a sheet,
+    /// so the title field's focus is never disturbed by using this control.
+    private var priorityPills: some View {
+        HStack(spacing: 4) {
+            ForEach(Priority.allCases) { priority in
+                let isSelected = newTaskPriority == priority
+                Button {
+                    newTaskPriority = isSelected ? nil : priority
+                } label: {
+                    Text(priority.rawValue)
+                        .font(.caption)
+                        .foregroundStyle(isSelected ? .white : .secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(isSelected ? color(for: priority) : Color.secondary.opacity(0.15))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Commits the row's current title (and any staged `newTaskDueDate`
+    /// (KAN-45) / `newTaskPriority` (KAN-30)) as a new task when the title
+    /// passes the same `isValidTitle` check every other creation path uses
+    /// (KAN-5), or silently discards all three otherwise. Checks validity
+    /// itself rather than calling `addTask` unconditionally and inspecting
+    /// its result, so the empty-title/lose-focus case never sets
+    /// `viewModel.validationMessage` and therefore never surfaces an error,
+    /// per the AC.
     private func commitOrDiscardNewTask() {
         if TaskListViewModel.isValidTitle(newTaskTitle) {
-            viewModel.addTask(title: newTaskTitle, dueDate: newTaskDueDate)
+            viewModel.addTask(title: newTaskTitle, dueDate: newTaskDueDate, priority: newTaskPriority)
         }
         newTaskTitle = ""
         newTaskDueDate = nil
+        newTaskPriority = nil
     }
 }
 

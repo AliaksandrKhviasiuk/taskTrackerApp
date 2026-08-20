@@ -5,6 +5,19 @@
 
 import Foundation
 
+/// Fixed set of task priorities (KAN-30) — Low, Medium, or High only; no
+/// custom/user-defined levels (explicitly out of scope). `String` raw values
+/// keep the persisted JSON representation stable and human-readable, and
+/// `CaseIterable`/`Identifiable` let the add-task row iterate over the three
+/// cases to build its picker control without a second source of truth.
+enum Priority: String, Codable, CaseIterable, Identifiable {
+    case low = "Low"
+    case medium = "Medium"
+    case high = "High"
+
+    var id: String { rawValue }
+}
+
 struct TaskItem: Identifiable, Equatable, Codable {
     let id: UUID
     var title: String
@@ -20,11 +33,22 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// existed (no `dueDate` key) still decodes successfully, as `nil`.
     var dueDate: Date?
 
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil) {
+    /// Optional priority (KAN-30), fixed to one of `Priority`'s three cases.
+    /// Set only at creation time — this story deliberately doesn't add an
+    /// edit-priority affordance (that's KAN-31).
+    ///
+    /// Declared `Optional`, mirroring `dueDate`, so the synthesized
+    /// `Codable` conformance decodes it via `decodeIfPresent`: JSON persisted
+    /// before this property existed (no `priority` key) still decodes
+    /// successfully, as `nil`.
+    var priority: Priority?
+
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil, priority: Priority? = nil) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
         self.dueDate = dueDate
+        self.priority = priority
     }
 
     /// Whether this task is overdue (KAN-23) — derived from `dueDate` and

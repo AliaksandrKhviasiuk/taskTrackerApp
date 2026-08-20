@@ -163,11 +163,15 @@ final class TaskListViewModel {
     ///   Normalized to a date-only value via `normalizedDueDate(_:)` before
     ///   being stored, regardless of what time-of-day component the caller
     ///   passed in.
+    /// - Parameter priority: Optional priority (KAN-30), one of `Priority`'s
+    ///   three fixed cases. Not required — passing `nil` (the default)
+    ///   creates the task with no priority. Stored as-is; unlike `dueDate`
+    ///   there's no normalization to apply.
     @discardableResult
-    func addTask(title: String, dueDate: Date? = nil) -> Bool {
+    func addTask(title: String, dueDate: Date? = nil, priority: Priority? = nil) -> Bool {
         guard let validTitle = validatedTitle(from: title) else { return false }
 
-        let newTask = TaskItem(title: validTitle, dueDate: normalizedDueDate(dueDate))
+        let newTask = TaskItem(title: validTitle, dueDate: normalizedDueDate(dueDate), priority: priority)
         tasks.append(newTask)
         storage.save(tasks)
         revealIfHidden(newTask.id)
@@ -234,18 +238,19 @@ final class TaskListViewModel {
         }
     }
 
-    /// Creates a copy of the task with the given ID (same title and due
-    /// date, not completed — KAN-20 forwards `source.dueDate`, isCompleted
-    /// duplication itself is unchanged from KAN-14) and appends it via the
-    /// same `addTask` path every other creation goes through (KAN-5's
-    /// single-validation-path rule) — the source title is already
+    /// Creates a copy of the task with the given ID (same title, due date,
+    /// and priority, not completed — KAN-20 forwards `source.dueDate`,
+    /// KAN-30 likewise forwards `source.priority` for the same reason,
+    /// isCompleted duplication itself is unchanged from KAN-14) and appends
+    /// it via the same `addTask` path every other creation goes through
+    /// (KAN-5's single-validation-path rule) — the source title is already
     /// valid/trimmed, so this always succeeds. No-op if `taskID` doesn't
     /// match a task in `tasks` (e.g. it's mid a pending deletion and already
     /// hidden from the View).
     @discardableResult
     func duplicateTask(id taskID: TaskItem.ID) -> Bool {
         guard let source = tasks.first(where: { $0.id == taskID }) else { return false }
-        return addTask(title: source.title, dueDate: source.dueDate)
+        return addTask(title: source.title, dueDate: source.dueDate, priority: source.priority)
     }
 
     func toggleCompletion(for taskID: TaskItem.ID) {
