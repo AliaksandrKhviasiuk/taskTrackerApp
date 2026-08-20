@@ -7,6 +7,21 @@
 
 import SwiftUI
 
+/// Carries `undoBanner`'s measured height (KAN-44 fix pass) up to `body` so
+/// the floating add-task button can offset itself by exactly that amount
+/// while the banner is showing. `.overlay(alignment: .bottomTrailing)`
+/// chained after `.safeAreaInset(edge: .bottom)` does *not* reposition a
+/// sibling overlay above the inset's reserved band on its own — verified
+/// live in the simulator by Reviewer-agent (KAN-44 Request Changes) — so
+/// this reads the banner's actual on-screen height instead of assuming
+/// modifier order handles it.
+private struct UndoBannerHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct ContentView: View {
     @State private var viewModel = TaskListViewModel(storage: FileTaskStore(), filterStorage: UserDefaultsFilterStore())
     @State private var newTaskTitle = ""
@@ -31,9 +46,31 @@ struct ContentView: View {
     @State private var editingDueDateTask: TaskItem?
     @FocusState private var isTitleFieldFocused: Bool
 
+    /// Captured from `ScrollViewReader` so `revealAddTaskRow()` (KAN-44) can
+    /// scroll to `addTaskRow` from the floating button, which lives outside
+    /// the reader's closure (it's an overlay on the outer `NavigationStack`,
+    /// positioned after `.safeAreaInset` so it can react to the undo
+    /// banner — see that modifier's placement below).
+    @State private var scrollProxy: ScrollViewProxy?
+
     /// Stable id for the trailing add-task row (KAN-43), so `ScrollViewReader`
     /// can scroll it into view regardless of how many task rows precede it.
     private static let addTaskRowID = "addTaskRow"
+
+    /// `undoBanner`'s measured height (KAN-44 fix pass), read via
+    /// `UndoBannerHeightPreferenceKey` and applied as bottom padding to
+    /// `addTaskFloatingButton` while the banner is visible, so the two never
+    /// visually collide regardless of the banner's dynamic content height
+    /// (single line vs. multi-task deletion text).
+    @State private var undoBannerHeight: CGFloat = 0
+
+    /// Single source of truth for "the undo banner is currently on screen" —
+    /// shared by `.safeAreaInset`'s condition and the floating button's
+    /// offset so the two can never disagree about whether the banner is
+    /// showing.
+    private var isUndoBannerVisible: Bool {
+        viewModel.hasPendingDeletion || viewModel.hasPendingEdit
+    }
 
     var body: some View {
         NavigationStack {
@@ -143,14 +180,10 @@ struct ContentView: View {
                         addTaskRow
                     }
                     .onAppear {
-                        // (KAN-43) KAN-44's reveal trigger doesn't exist yet, so
-                        // the row is always visible today — this is the closest
-                        // available "revealed" moment to auto-scroll to it and
-                        // focus its title field. Once KAN-44 adds a real reveal
-                        // action, this should move to fire from that action
-                        // instead of on every appearance of the screen.
-                        isTitleFieldFocused = true
-                        proxy.scrollTo(Self.addTaskRowID, anchor: .bottom)
+                        // (KAN-44) Capture the proxy so `revealAddTaskRow()`
+                        // can drive it from the floating button's tap
+                        // handler, which lives outside this closure.
+                        scrollProxy = proxy
                     }
                 }
             }
@@ -200,9 +233,28 @@ struct ContentView: View {
                 dueDatePickerSheet
             }
             .safeAreaInset(edge: .bottom) {
-                if viewModel.hasPendingDeletion || viewModel.hasPendingEdit {
+                if isUndoBannerVisible {
                     undoBanner
                 }
+            }
+            .onPreferenceChange(UndoBannerHeightPreferenceKey.self) { height in
+                undoBannerHeight = height
+            }
+            // (KAN-44 fix pass) `.overlay(alignment: .bottomTrailing)` after
+            // `.safeAreaInset` does NOT push the overlay above the inset's
+            // reserved band on its own — confirmed live by Reviewer-agent,
+            // the button rendered on top of the undo banner instead of
+            // above it. Explicitly offsetting the button by the banner's
+            // *measured* height (via `UndoBannerHeightPreferenceKey`) while
+            // it's visible guarantees no overlap regardless of the banner's
+            // content height, and collapses back to 0 — the ordinary device
+            // safe area position — the instant the banner is hidden. Always
+            // present, independent of `viewModel.tasks.isEmpty`, so it's
+            // available for the very first task too.
+            .overlay(alignment: .bottomTrailing) {
+                addTaskFloatingButton
+                    .padding(.bottom, isUndoBannerVisible ? undoBannerHeight : 0)
+                    .animation(.easeInOut(duration: 0.2), value: isUndoBannerVisible)
             }
         }
     }
@@ -245,6 +297,19 @@ struct ContentView: View {
         }
         .padding()
         .background(.thinMaterial)
+        .background(
+            // (KAN-44 fix pass) Measures the banner's actual rendered
+            // height — including its own padding and the safe-area
+            // insetting SwiftUI adds for `.safeAreaInset(edge: .bottom)`
+            // content — and publishes it up via `UndoBannerHeightPreferenceKey`
+            // so `addTaskFloatingButton` can offset by exactly that amount.
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: UndoBannerHeightPreferenceKey.self,
+                    value: proxy.size.height
+                )
+            }
+        )
     }
 
     private var undoBannerText: String {
@@ -253,6 +318,39 @@ struct ContentView: View {
             return count == 1 ? "Task deleted" : "\(count) tasks deleted"
         } else {
             return "Task edited"
+        }
+    }
+
+    /// Icon-only floating "Add Task" trigger (KAN-44), overlaid in the
+    /// bottom-right corner. Tapping it calls `revealAddTaskRow()` — the same
+    /// scroll-to-row + focus-title-field behavior KAN-43 previously fired
+    /// automatically on every screen appearance, now fired deliberately on
+    /// tap instead. See `ContentView.body`'s `.overlay` placement (after
+    /// `.safeAreaInset`) for how this avoids colliding with the undo banner.
+    private var addTaskFloatingButton: some View {
+        Button(action: revealAddTaskRow) {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(Color.accentColor))
+                .shadow(radius: 4, y: 2)
+        }
+        .padding(20)
+        .accessibilityLabel("Add Task")
+    }
+
+    /// Scrolls the trailing `addTaskRow` into view and focuses its title
+    /// field (KAN-44). This is the same mechanism KAN-43 stubbed onto the
+    /// list's `.onAppear` — since the row is a permanent trailing row with
+    /// no show/hide state (KAN-43 removed the old reveal/dismiss toggle),
+    /// "trigger the add-task action" now means "bring the always-present
+    /// row to the user's attention and put the keyboard in it," which is
+    /// exactly this.
+    private func revealAddTaskRow() {
+        isTitleFieldFocused = true
+        withAnimation {
+            scrollProxy?.scrollTo(Self.addTaskRowID, anchor: .bottom)
         }
     }
 
