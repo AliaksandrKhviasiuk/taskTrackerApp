@@ -167,11 +167,15 @@ final class TaskListViewModel {
     ///   three fixed cases. Not required — passing `nil` (the default)
     ///   creates the task with no priority. Stored as-is; unlike `dueDate`
     ///   there's no normalization to apply.
+    /// - Parameter tag: Optional free-text category/tag (KAN-33). Not
+    ///   required — passing `nil` (the default) creates the task with no
+    ///   tag. Normalized via `normalizedTag(_:)` before being stored, so a
+    ///   whitespace-only entry is treated the same as leaving it unset.
     @discardableResult
-    func addTask(title: String, dueDate: Date? = nil, priority: Priority? = nil) -> Bool {
+    func addTask(title: String, dueDate: Date? = nil, priority: Priority? = nil, tag: String? = nil) -> Bool {
         guard let validTitle = validatedTitle(from: title) else { return false }
 
-        let newTask = TaskItem(title: validTitle, dueDate: normalizedDueDate(dueDate), priority: priority)
+        let newTask = TaskItem(title: validTitle, dueDate: normalizedDueDate(dueDate), priority: priority, tag: normalizedTag(tag))
         tasks.append(newTask)
         storage.save(tasks)
         revealIfHidden(newTask.id)
@@ -186,6 +190,23 @@ final class TaskListViewModel {
     private func normalizedDueDate(_ dueDate: Date?) -> Date? {
         guard let dueDate else { return nil }
         return Calendar.current.startOfDay(for: dueDate)
+    }
+
+    /// Trims whitespace from `tag` and collapses a blank result to `nil`, so
+    /// leaving the tag `TextField` empty (or filling it with only spaces)
+    /// counts as "left the category/tag unset" per the AC, rather than
+    /// persisting and displaying an empty-looking badge. Deliberately its
+    /// own tiny normalization step — mirroring how `normalizedDueDate(_:)`
+    /// is dueDate's own — rather than routing through `isValidTitle`/
+    /// `cappedTitle`, which are title's canonical validation path (KAN-5)
+    /// for a conceptually different field. Unlike title, tag has no length
+    /// cap and nothing here can cause `addTask` to fail: the AC places no
+    /// length or non-emptiness requirement on tag, so any non-blank text is
+    /// accepted as-is.
+    private func normalizedTag(_ tag: String?) -> String? {
+        guard let tag else { return nil }
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     @discardableResult
@@ -239,18 +260,21 @@ final class TaskListViewModel {
     }
 
     /// Creates a copy of the task with the given ID (same title, due date,
-    /// and priority, not completed — KAN-20 forwards `source.dueDate`,
-    /// KAN-30 likewise forwards `source.priority` for the same reason,
-    /// isCompleted duplication itself is unchanged from KAN-14) and appends
-    /// it via the same `addTask` path every other creation goes through
-    /// (KAN-5's single-validation-path rule) — the source title is already
+    /// priority, and tag, not completed — KAN-20 forwards `source.dueDate`,
+    /// KAN-30 forwards `source.priority`, KAN-33 likewise forwards
+    /// `source.tag` for the same reason: a tag describes the task itself,
+    /// the same way its due date and priority do, so a duplicate should
+    /// carry it over rather than silently dropping it. isCompleted
+    /// duplication itself is unchanged from KAN-14) and appends it via the
+    /// same `addTask` path every other creation goes through (KAN-5's
+    /// single-validation-path rule) — the source title is already
     /// valid/trimmed, so this always succeeds. No-op if `taskID` doesn't
     /// match a task in `tasks` (e.g. it's mid a pending deletion and already
     /// hidden from the View).
     @discardableResult
     func duplicateTask(id taskID: TaskItem.ID) -> Bool {
         guard let source = tasks.first(where: { $0.id == taskID }) else { return false }
-        return addTask(title: source.title, dueDate: source.dueDate, priority: source.priority)
+        return addTask(title: source.title, dueDate: source.dueDate, priority: source.priority, tag: source.tag)
     }
 
     func toggleCompletion(for taskID: TaskItem.ID) {

@@ -352,6 +352,138 @@ final class TaskItemTests: XCTestCase {
         XCTAssertNotEqual(withoutPriority, withPriority)
     }
 
+    // MARK: - AC: a task can optionally have a category/tag attached (KAN-33)
+
+    func test_init_withoutTagArgument_defaultsToNilTag() {
+        // Arrange
+        // no setup needed
+
+        // Act
+        let task = TaskItem(title: "Buy milk")
+
+        // Assert
+        XCTAssertNil(task.tag)
+    }
+
+    func test_init_withTagArgument_storesTag() {
+        // Arrange
+        // no setup needed
+
+        // Act
+        let task = TaskItem(title: "Buy milk", tag: "Work")
+
+        // Assert
+        XCTAssertEqual(task.tag, "Work")
+    }
+
+    // MARK: - Codable: tag round-trips through encode/decode (KAN-33)
+
+    func test_encodeThenDecode_withTagSet_preservesTag() throws {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", tag: "Work")
+        let data = try JSONEncoder().encode(task)
+
+        // Act
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+        // Assert
+        XCTAssertEqual(decoded.tag, "Work")
+    }
+
+    func test_encodeThenDecode_withNilTag_preservesNilTag() throws {
+        // Arrange
+        let task = TaskItem(title: "Buy milk")
+        let data = try JSONEncoder().encode(task)
+
+        // Act
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+        // Assert
+        XCTAssertNil(decoded.tag)
+    }
+
+    // MARK: - Codable: a nil tag is omitted from the encoded JSON entirely
+    // (encodeIfPresent, mirroring dueDate's KAN-19 and priority's KAN-30
+    // precedent) rather than encoded as an explicit null — this is exactly
+    // what makes pre-KAN-33 persisted JSON (which never had a "tag" key at
+    // all) already shaped like a task with no tag, so no migration is needed.
+
+    func test_encode_withNilTag_omitsTagKeyFromJSON() throws {
+        // Arrange
+        let task = TaskItem(title: "Buy milk", priority: .medium)
+
+        // Act
+        let data = try JSONEncoder().encode(task)
+        let jsonString = String(data: data, encoding: .utf8) ?? ""
+
+        // Assert
+        XCTAssertFalse(jsonString.contains("\"tag\""), "a nil tag must be omitted from the encoded JSON, not written as an explicit null")
+    }
+
+    // MARK: - Codable: JSON persisted before KAN-33 (no "tag" key at all)
+    // still decodes successfully, as nil — same backward-compatibility
+    // guarantee KAN-19/KAN-30 established for "dueDate"/"priority" (see
+    // test_decode_legacyJSONWithoutDueDateKey_decodesWithNilDueDate and
+    // test_decode_legacyJSONWithoutPriorityKey_decodesWithNilPriority
+    // above), now re-verified for the newly-added "tag" key (Manual-QA-
+    // agent's note-for-Unit-Tests-agent flagged this class of check as
+    // worth doing directly).
+
+    func test_decode_legacyJSONWithoutTagKey_decodesWithNilTag() throws {
+        // Arrange
+        let id = UUID()
+        let legacyJSON = """
+        {"id":"\(id.uuidString)","title":"Buy milk","isCompleted":false}
+        """
+        let data = Data(legacyJSON.utf8)
+
+        // Act
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+        // Assert
+        XCTAssertEqual(decoded.id, id)
+        XCTAssertEqual(decoded.title, "Buy milk")
+        XCTAssertNil(decoded.tag)
+    }
+
+    // MARK: - Equatable: tag participates in equality (KAN-33)
+
+    func test_equality_withSameTag_areEqual() {
+        // Arrange
+        let id = UUID()
+        let first = TaskItem(id: id, title: "Buy milk", tag: "Work")
+
+        // Act
+        let second = TaskItem(id: id, title: "Buy milk", tag: "Work")
+
+        // Assert
+        XCTAssertEqual(first, second)
+    }
+
+    func test_equality_withDifferentTag_areNotEqual() {
+        // Arrange
+        let id = UUID()
+        let first = TaskItem(id: id, title: "Buy milk", tag: "Work")
+
+        // Act
+        let second = TaskItem(id: id, title: "Buy milk", tag: "Home")
+
+        // Assert
+        XCTAssertNotEqual(first, second)
+    }
+
+    func test_equality_withOneNilAndOneSetTag_areNotEqual() {
+        // Arrange
+        let id = UUID()
+        let withoutTag = TaskItem(id: id, title: "Buy milk")
+
+        // Act
+        let withTag = TaskItem(id: id, title: "Buy milk", tag: "Work")
+
+        // Assert
+        XCTAssertNotEqual(withoutTag, withTag)
+    }
+
     // MARK: - AC: overdue determination (KAN-23)
     //
     // TaskItem.isOverdue is a pure derived value of (isCompleted, dueDate) evaluated

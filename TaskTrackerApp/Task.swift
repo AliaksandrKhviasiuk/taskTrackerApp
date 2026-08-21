@@ -43,12 +43,27 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// successfully, as `nil`.
     var priority: Priority?
 
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil, priority: Priority? = nil) {
+    /// Optional category/tag (KAN-33) — free-text, single value (not an
+    /// array/multi-select — the Scrum Master explicitly decided
+    /// single-tag-per-task; see `TaskListViewModel.addTask(title:dueDate:priority:tag:)`).
+    /// Unlike `priority`, this has no fixed set of cases: the epic
+    /// deliberately doesn't define a closed category list, so a plain
+    /// `String` is the model, not an enum. Set only at creation time — this
+    /// story deliberately doesn't add an edit-tag affordance (that's KAN-34).
+    ///
+    /// Declared `Optional`, mirroring `dueDate`/`priority`, so the
+    /// synthesized `Codable` conformance decodes it via `decodeIfPresent`:
+    /// JSON persisted before this property existed (no `tag` key) still
+    /// decodes successfully, as `nil`.
+    var tag: String?
+
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil, priority: Priority? = nil, tag: String? = nil) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
         self.dueDate = dueDate
         self.priority = priority
+        self.tag = tag
     }
 
     /// Whether this task is overdue (KAN-23) — derived from `dueDate` and

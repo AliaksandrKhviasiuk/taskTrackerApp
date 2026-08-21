@@ -36,7 +36,7 @@ struct ContentView: View {
     /// Whether `dueDatePickerSheet` is currently presented (KAN-45). Doubles
     /// as the guard that prevents `commitOrDiscardNewTask()` from firing
     /// prematurely when the sheet's presentation steals focus from the title
-    /// field — see `addTaskRow`'s `onChange(of: isTitleFieldFocused)`.
+    /// field — see `addTaskRow`'s `onChange(of: focusedAddTaskField)`.
     @State private var isDueDatePickerPresented = false
 
     /// Priority staged for the in-progress new task (KAN-30) — `nil` until
@@ -47,12 +47,44 @@ struct ContentView: View {
     /// needed here — see `priorityPills`'s doc comment for why.
     @State private var newTaskPriority: Priority?
 
+    /// Free-text tag/category staged for the in-progress new task (KAN-33) —
+    /// empty string until the user types into `tagField`, matching
+    /// `addTask(title:dueDate:priority:tag:)`'s optional parameter (empty
+    /// text is normalized to `nil` inside the ViewModel, not here — see
+    /// `TaskListViewModel.normalizedTag(_:)`). Lives only in this row's
+    /// local state; nothing is persisted until `commitOrDiscardNewTask()`
+    /// actually creates the task. A plain `String` rather than `String?`
+    /// because it binds directly to a `TextField`, which requires a
+    /// non-optional binding.
+    @State private var newTaskTag = ""
+
     /// Drives the due-date edit sheet (KAN-22). Triggered via a long-press
     /// context menu on the row — distinct from tap-to-complete (KAN-3), the
     /// leading edit-title/duplicate swipe (KAN-8/KAN-14), and the trailing
     /// delete swipe (KAN-4/KAN-46), per the AC's non-collision requirement.
     @State private var editingDueDateTask: TaskItem?
-    @FocusState private var isTitleFieldFocused: Bool
+
+    /// Which field within `addTaskRow` currently holds focus, if any (KAN-33).
+    /// A single `@FocusState` enum — rather than one `Bool` per field — so
+    /// that moving focus from `.title` directly to `.tag` (both plain
+    /// `TextField`s in the same row, e.g. the user tapping straight from one
+    /// to the other) is reported as one atomic transition, `.title` →
+    /// `.tag`, instead of two separately-ordered updates through `nil` that
+    /// a pair of `Bool`s could race on. `addTaskRow`'s `onChange` below
+    /// commits/discards only when this becomes `nil` — i.e. focus left both
+    /// fields — so tabbing between title and tag never fires a premature
+    /// commit the way losing only one boolean's focus would. This
+    /// deliberately doesn't need `dueDatePickerSheet`'s guard-with-a-second-
+    /// flag treatment (`isDueDatePickerPresented`): that guard exists
+    /// because presenting a *sheet* resigns focus as a side effect with no
+    /// corresponding "focus" state of its own to transition into, whereas
+    /// here both fields are ordinary in-row controls that the enum already
+    /// accounts for directly.
+    private enum AddTaskField: Hashable {
+        case title
+        case tag
+    }
+    @FocusState private var focusedAddTaskField: AddTaskField?
 
     /// Captured from `ScrollViewReader` so `revealAddTaskRow()` (KAN-44) can
     /// scroll to `addTaskRow` from the floating button, which lives outside
@@ -151,6 +183,22 @@ struct ContentView: View {
                                                         .padding(.horizontal, 6)
                                                         .padding(.vertical, 2)
                                                         .background(Capsule().fill(color(for: priority)))
+                                                }
+
+                                                // (KAN-33) Tag badge shown alongside the title, on
+                                                // the same line as priority — omitted entirely (no
+                                                // placeholder/error) when the task has no tag,
+                                                // mirroring priority's and due date's
+                                                // shown-only-when-set convention. Free-text, so a
+                                                // single neutral color rather than priority's
+                                                // per-value color mapping.
+                                                if let tag = task.tag {
+                                                    Text(tag)
+                                                        .font(.caption2.weight(.medium))
+                                                        .foregroundStyle(.secondary)
+                                                        .padding(.horizontal, 6)
+                                                        .padding(.vertical, 2)
+                                                        .background(Capsule().fill(Color.secondary.opacity(0.15)))
                                                 }
                                             }
 
@@ -265,7 +313,7 @@ struct ContentView: View {
                 // the row to the same "still being edited" state the user
                 // was in before tapping the pill, letting a later real
                 // blur/tap-away commit or discard the row normally.
-                isTitleFieldFocused = true
+                focusedAddTaskField = .title
             }) {
                 dueDatePickerSheet
             }
@@ -385,7 +433,7 @@ struct ContentView: View {
     /// row to the user's attention and put the keyboard in it," which is
     /// exactly this.
     private func revealAddTaskRow() {
-        isTitleFieldFocused = true
+        focusedAddTaskField = .title
         withAnimation {
             scrollProxy?.scrollTo(Self.addTaskRowID, anchor: .bottom)
         }
@@ -397,8 +445,8 @@ struct ContentView: View {
     /// (KAN-5's single-validation-path rule), while an empty title is
     /// silently discarded with no error shown. No Confirm/Cancel controls —
     /// the story explicitly removes them. Due-date input (KAN-45) lives in
-    /// `dueDatePill`, and priority input (KAN-30) in `priorityPills`, both
-    /// shown beneath the title.
+    /// `dueDatePill`, priority input (KAN-30) in `priorityPills`, and tag
+    /// input (KAN-33) in `tagField`, all shown beneath the title.
     ///
     /// **Premature-commit risk (KAN-45):** presenting `dueDatePickerSheet`
     /// resigns the title `TextField`'s focus (sheet presentation dismisses
@@ -419,13 +467,34 @@ struct ContentView: View {
     /// specifically *modal presentation* resigning the title field's focus
     /// as a side effect (see `dueDatePickerSheet`'s doc comment); a plain
     /// button tap within the same row does not do that. So no
-    /// `isDueDatePickerPresented`-style guard was added for priority — the
-    /// `onChange` below only ever needs to special-case the due-date sheet.
+    /// `isDueDatePickerPresented`-style guard was needed for priority.
+    ///
+    /// **Tag control (KAN-33) raises a *different* premature-commit risk,
+    /// which is why `focusedAddTaskField` is an enum rather than a second
+    /// `Bool`.** `tagField` is a plain `TextField`, not a sheet, so it can't
+    /// trigger the KAN-45 modal-presentation bug. But it *is* a second
+    /// focusable control in the same row: tapping straight from the title
+    /// field into the tag field moves focus within the row rather than
+    /// leaving it, and that must not be treated as a blur that commits or
+    /// discards the row. A second `@FocusState private var
+    /// isTagFieldFocused: Bool` sitting alongside `isTitleFieldFocused`
+    /// would reintroduce exactly that bug via a different door: SwiftUI
+    /// doesn't guarantee which of two independent booleans updates first
+    /// when focus moves between their controls, so an `onChange(of:
+    /// isTitleFieldFocused)` guard could still observe "title lost focus"
+    /// before "tag gained focus" ever lands, and fire early — silently
+    /// dropping whatever the user was about to type into tag, and (since the
+    /// title is already valid at that point) creating the task right then
+    /// instead of waiting for a real blur. Folding both fields into one
+    /// `AddTaskField?` sidesteps the race entirely: a tap from title to tag
+    /// is a single atomic transition (`.title` → `.tag`), never passing
+    /// through `nil`, so the `onChange` below — which only commits when the
+    /// new value is `nil` — never fires for it.
     private var addTaskRow: some View {
         Label {
             VStack(alignment: .leading, spacing: 4) {
                 TextField("New Task", text: $newTaskTitle)
-                    .focused($isTitleFieldFocused)
+                    .focused($focusedAddTaskField, equals: .title)
                     .onChange(of: newTaskTitle) {
                         newTaskTitle = TaskListViewModel.cappedTitle(newTaskTitle)
                     }
@@ -435,14 +504,16 @@ struct ContentView: View {
                     dueDatePill
                     priorityPills
                 }
+
+                tagField
             }
         } icon: {
             Image(systemName: "plus.circle")
                 .foregroundStyle(.secondary)
         }
         .id(Self.addTaskRowID)
-        .onChange(of: isTitleFieldFocused) { _, isFocused in
-            guard !isFocused, !isDueDatePickerPresented else { return }
+        .onChange(of: focusedAddTaskField) { _, focusedField in
+            guard focusedField == nil, !isDueDatePickerPresented else { return }
             commitOrDiscardNewTask()
         }
     }
@@ -534,21 +605,46 @@ struct ContentView: View {
         }
     }
 
+    /// Free-text tag/category input (KAN-33), shown beneath `dueDatePill`/
+    /// `priorityPills`. A plain `TextField` — not a fixed set of pills like
+    /// priority — since the epic deliberately leaves categories open-ended
+    /// rather than defining a closed list. No live capping (unlike title's
+    /// `cappedTitle`): the AC places no length limit on tag, and applying
+    /// title's cap here would misuse title-specific machinery on an
+    /// unrelated field (see `TaskListViewModel.normalizedTag(_:)`'s doc
+    /// comment for the full reasoning). `onSubmit` mirrors the title field's
+    /// so pressing return here also commits the row.
+    private var tagField: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "tag")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("Tag", text: $newTaskTag)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .focused($focusedAddTaskField, equals: .tag)
+                .onSubmit(commitOrDiscardNewTask)
+        }
+    }
+
     /// Commits the row's current title (and any staged `newTaskDueDate`
-    /// (KAN-45) / `newTaskPriority` (KAN-30)) as a new task when the title
-    /// passes the same `isValidTitle` check every other creation path uses
-    /// (KAN-5), or silently discards all three otherwise. Checks validity
-    /// itself rather than calling `addTask` unconditionally and inspecting
-    /// its result, so the empty-title/lose-focus case never sets
-    /// `viewModel.validationMessage` and therefore never surfaces an error,
-    /// per the AC.
+    /// (KAN-45) / `newTaskPriority` (KAN-30) / `newTaskTag` (KAN-33)) as a
+    /// new task when the title passes the same `isValidTitle` check every
+    /// other creation path uses (KAN-5), or silently discards all four
+    /// otherwise. Checks validity itself rather than calling `addTask`
+    /// unconditionally and inspecting its result, so the empty-title/lose-
+    /// focus case never sets `viewModel.validationMessage` and therefore
+    /// never surfaces an error, per the AC. `newTaskTag`'s blank-to-`nil`
+    /// normalization happens inside `addTask` (via
+    /// `TaskListViewModel.normalizedTag(_:)`), not here.
     private func commitOrDiscardNewTask() {
         if TaskListViewModel.isValidTitle(newTaskTitle) {
-            viewModel.addTask(title: newTaskTitle, dueDate: newTaskDueDate, priority: newTaskPriority)
+            viewModel.addTask(title: newTaskTitle, dueDate: newTaskDueDate, priority: newTaskPriority, tag: newTaskTag)
         }
         newTaskTitle = ""
         newTaskDueDate = nil
         newTaskPriority = nil
+        newTaskTag = ""
     }
 }
 
