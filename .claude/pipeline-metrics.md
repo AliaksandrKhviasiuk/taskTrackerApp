@@ -33,6 +33,7 @@ A rate that stays at 0% for a stretch is itself a signal — see the "Pipeline c
 | KAN-45 | 2026-08-19 | Pass (1 round) | Approve (1 round) | 0/10/10 | N/A — zero new lines in ViewModel/Model layer, pure View-layer due-date pill/sheet |
 | KAN-44 | 2026-08-20 | Pass (1 round) | Request Changes → Approve (2 rounds) | 0/11/11 | N/A — pure View-layer floating button; Reviewer-agent caught the blocker (button visually overlapping the undo banner) only via a live simulator screenshot, which PR-review-agent and Unit-Tests-agent had both explicitly flagged they couldn't verify statically — confirms the "live-check when static reading can't certify layout" pattern is pulling weight |
 | KAN-30 | 2026-08-20 | Pass (1 round) | Approve (1 round) | 5/4/9 | `Task.swift` 100%, `TaskListViewModel.swift` 99.55% (xccov-measured) |
+| KAN-33 | 2026-08-21 | Pass (1 round) | Approve (1 round) | 6/5/11 | `Task.swift` 100%, `TaskListViewModel.swift` 99.56% (xccov-measured) |
 
 ## Calibration checks (independent re-review, every 4-6 tickets)
 
