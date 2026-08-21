@@ -39,6 +39,8 @@ A rate that stays at 0% for a stretch is itself a signal — see the "Pipeline c
 
 Per CLAUDE.md's "Pipeline calibration": every 4-6 merged tickets, an independent `reviewer-agent.md` pass runs against the same diff without seeing the first review's verdict. Log the outcome here.
 
+**Tickets merged since last calibration check: 5** (KAN-43, KAN-45, KAN-44, KAN-30, KAN-33 — merged 2026-08-19 through 2026-08-21, no calibration check run against any of them yet). Update this count every time a per-ticket row is appended above; reset to 0 the moment a calibration pass is logged. Treat hitting 4-6 as a hard trigger to run one, not a reminder to eyeball the table.
+
 | Ticket reviewed | Date | Independent pass found extra blocker? | Note |
 |---|---|---|---|
 | KAN-46 | 2026-08-14 | No | Approve, matches original. Same 2 suggestions independently found (View-layer id→index glue on delete; TC-02/03/04 could cite existing KAN-10 tests for formal traceability instead of landing Manual-only). |
